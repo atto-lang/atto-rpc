@@ -1,11 +1,11 @@
-import module rpc from "../src/rpc";
+import module rpc from "../src/rpc.ores";
 
-fnc ok(Result<bool, String> result) -> void {
+fnc ok(Result<bool, String> result): void {
   stdio.println(result.is_ok());
   return;
 }
 
-pub routine main() -> void {
+pub routine main(): void {
   val GetUserRequest = rpc.message("GetUserRequest", arr[
     rpc.field("id", 1, "1", rpc.string_type(), true, false)
   ]);

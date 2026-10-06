@@ -535,9 +535,15 @@ define module rpc as
         let bool request_field_found = false;
         for (const message_value of self.messages_value) {
           if message_value.name == request_type_name; then
-            if message_value.field_named(binding_value.field_name).is_some(); then
-              request_field_found = true;
-            fi
+            for (let int field_index = 0; field_index < message_value.field_count(); field_index = field_index + 1) {
+              val FieldDef request_field = message_value.field_at(field_index);
+              if request_field.name == binding_value.field_name; then
+                request_field_found = true;
+                if binding_value.location == 0 && !request_field.required; then
+                  return Err("HTTP path field must be required");
+                fi
+              fi
+            }
           fi
         }
 
@@ -1275,6 +1281,65 @@ define module rpc as
       out.newline();
     }
 
+    // Build an operation-specific HTTP request projection. Explicit path,
+    // query, header, and cookie fields become TypeSpec metadata; all unbound
+    // request fields remain body data under TypeSpec's normal HTTP rules.
+    for (let int method_index = 0; method_index < contracts.method_count(); method_index = method_index + 1) {
+      val RpcMethodDef method_value = contracts.method_at(method_index);
+      val Option<HttpHandlerDef> http_value = contracts.http_by_contract(method_value.contract_id);
+
+      if http_value.is_some(); then
+        val Option<MessageDef> request_message_value = contracts.message_named(method_value.request_type);
+        if request_message_value.is_some(); then
+          val MessageDef request_message = request_message_value.unwrap();
+
+          out.write("model ");
+          out.write(method_value.service);
+          out.write("_");
+          out.write(method_value.name);
+          out.line("_HttpRequest {");
+
+          for (let int field_index = 0; field_index < request_message.field_count(); field_index = field_index + 1) {
+            val FieldDef field_value = request_message.field_at(field_index);
+            val Option<HttpFieldBindingDef> binding_value =
+              contracts.http_field_binding(method_value.contract_id, field_value.name);
+
+            if binding_value.is_some(); then
+              val HttpFieldBindingDef binding = binding_value.unwrap();
+              if binding.location == 0; then
+                out.write("  @path(\"");
+              elseif binding.location == 1; then
+                out.write("  @query(\"");
+              elseif binding.location == 2; then
+                out.write("  @header(\"");
+              else
+                out.write("  @cookie(\"");
+              fi
+              out.write(binding.wire_name);
+              out.line("\")");
+            fi
+
+            out.write("  ");
+            out.write(field_value.name);
+            if !field_value.required; then
+              out.write("?");
+            fi
+            out.write(": ");
+            if field_value.repeated; then
+              emit_typespec_type(&mut out, field_value.type_kind(), field_value.type_name());
+              out.write("[]");
+            else
+              emit_typespec_type(&mut out, field_value.type_kind(), field_value.type_name());
+            fi
+            out.line(";");
+          }
+
+          out.line("}");
+          out.newline();
+        fi
+      fi
+    }
+
     // TypeSpec operations are scoped by RPC service so identical method names
     // in different services remain distinct, exactly like protobuf services.
     for (let int method_index = 0; method_index < contracts.method_count(); method_index = method_index + 1) {
@@ -1318,8 +1383,16 @@ define module rpc as
 
             out.write("op ");
             out.write(method_value.name);
-            out.write("(request: ");
-            out.write(method_value.request_type);
+            if http_value.is_some(); then
+              out.write("(...");
+              out.write(method_value.service);
+              out.write("_");
+              out.write(method_value.name);
+              out.write("_HttpRequest");
+            else
+              out.write("(request: ");
+              out.write(method_value.request_type);
+            fi
             out.write("): ");
             out.write(method_value.response_type);
             out.line(";");

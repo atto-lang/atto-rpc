@@ -515,9 +515,41 @@ define module rpc as
         fi
       }
 
+      // HTTP metadata bindings must point at a registered HTTP contract and
+      // a real field on that contract's RPC request message.
+      for (const binding_value of self.http_field_bindings_value) {
+        let bool handler_found = false;
+        let String request_type_name = "";
+
+        for (const handler_value of self.http_handlers_value) {
+          if handler_value.contract_id == binding_value.contract_id; then
+            handler_found = true;
+            request_type_name = handler_value.request_type;
+          fi
+        }
+
+        if !handler_found; then
+          return Err("HTTP field binding has no matching HTTP handler");
+        fi
+
+        let bool request_field_found = false;
+        for (const message_value of self.messages_value) {
+          if message_value.name == request_type_name; then
+            if message_value.field_named(binding_value.field_name).is_some(); then
+              request_field_found = true;
+            fi
+          fi
+        }
+
+        if !request_field_found; then
+          return Err("HTTP field binding references an unknown request field");
+        fi
+      }
+
       let Array<MessageDef> messages_copy = arr[];
       let Array<RpcMethodDef> methods_copy = arr[];
       let Array<HttpHandlerDef> http_copy = arr[];
+      let Array<HttpFieldBindingDef> http_field_bindings_copy = arr[];
 
       for (const message_value of self.messages_value) {
         messages_copy.add(message_value);
@@ -528,8 +560,16 @@ define module rpc as
       for (const handler_value of self.http_handlers_value) {
         http_copy.add(handler_value);
       }
+      for (const binding_value of self.http_field_bindings_value) {
+        http_field_bindings_copy.add(binding_value);
+      }
 
-      return Ok(new ContractSet(messages_copy, methods_copy, http_copy));
+      return Ok(new ContractSet(
+        messages_copy,
+        methods_copy,
+        http_copy,
+        http_field_bindings_copy
+      ));
     }
   end
 
@@ -587,6 +627,88 @@ define module rpc as
 
   pub fnc bidi_stream(): int {
     return 3;
+  }
+
+  pub fnc http_path_location(): int {
+    return 0;
+  }
+
+  pub fnc http_query_location(): int {
+    return 1;
+  }
+
+  pub fnc http_header_location(): int {
+    return 2;
+  }
+
+  pub fnc http_cookie_location(): int {
+    return 3;
+  }
+
+  pub fnc http_field_binding(
+    int contract_id,
+    String field_name,
+    String wire_name,
+    int location
+  ): HttpFieldBindingDef {
+    return new HttpFieldBindingDef(
+      contract_id,
+      field_name,
+      wire_name,
+      location
+    );
+  }
+
+  pub fnc http_path_field(
+    int contract_id,
+    String field_name,
+    String wire_name
+  ): HttpFieldBindingDef {
+    return http_field_binding(
+      contract_id,
+      field_name,
+      wire_name,
+      http_path_location()
+    );
+  }
+
+  pub fnc http_query_field(
+    int contract_id,
+    String field_name,
+    String wire_name
+  ): HttpFieldBindingDef {
+    return http_field_binding(
+      contract_id,
+      field_name,
+      wire_name,
+      http_query_location()
+    );
+  }
+
+  pub fnc http_header_field(
+    int contract_id,
+    String field_name,
+    String wire_name
+  ): HttpFieldBindingDef {
+    return http_field_binding(
+      contract_id,
+      field_name,
+      wire_name,
+      http_header_location()
+    );
+  }
+
+  pub fnc http_cookie_field(
+    int contract_id,
+    String field_name,
+    String wire_name
+  ): HttpFieldBindingDef {
+    return http_field_binding(
+      contract_id,
+      field_name,
+      wire_name,
+      http_cookie_location()
+    );
   }
 
   pub fnc field(

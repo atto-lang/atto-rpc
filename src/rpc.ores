@@ -9,15 +9,15 @@ define module rpc as
   // Type kinds:
   // 0 string, 1 bool, 2 int32, 3 int64, 4 float32, 5 float64,
   // 6 bytes, 7 named message, 8 timestamp, 9 any/json value.
-  define class TypeRef as
+  pub define class TypeRef as
     pub val int kind;
     pub val String name;
 
-    pub is_named() -> bool {
+    pub is_named(): bool {
       return self.kind == 7;
     }
 
-    pub is_valid() -> bool {
+    pub is_valid(): bool {
       if self.kind < 0 || self.kind > 9; do
         return false;
       fi
@@ -32,7 +32,7 @@ define module rpc as
   // Oreslang stdlib does not yet expose a stable int->String formatting API;
   // keeping the canonical decimal token in the contract lets protobuf and
   // MessagePack IDL emission remain host-independent.
-  define class FieldDef as
+  pub define class FieldDef as
     pub val String name;
     pub val int number;
     pub val String number_text;
@@ -40,7 +40,7 @@ define module rpc as
     pub val bool required;
     pub val bool repeated;
 
-    pub is_valid() -> bool {
+    pub is_valid(): bool {
       if self.name == ""; do
         return false;
       fi
@@ -51,19 +51,19 @@ define module rpc as
     }
   end
 
-  define class MessageDef as
+  pub define class MessageDef as
     pub val String name;
     val Array<FieldDef> fields_value;
 
-    pub field_count() -> int {
+    pub field_count(): int {
       return self.fields_value.size;
     }
 
-    pub field_at(int index) -> FieldDef {
+    pub field_at(int index): FieldDef {
       return self.fields_value.get(index);
     }
 
-    pub field_named(String name) -> Option<FieldDef> {
+    pub field_named(String name): Option<FieldDef> {
       for (const field_value of self.fields_value) {
         if field_value.name == name; do
           return Some(field_value);
@@ -72,7 +72,7 @@ define module rpc as
       return None;
     }
 
-    pub is_valid() -> bool {
+    pub is_valid(): bool {
       if self.name == ""; do
         return false;
       fi
@@ -97,7 +97,7 @@ define module rpc as
 
   // streaming kinds:
   // 0 unary, 1 server streaming, 2 client streaming, 3 bidirectional.
-  define class RpcMethodDef as
+  pub define class RpcMethodDef as
     pub val int contract_id;
     pub val String service;
     pub val String name;
@@ -106,7 +106,7 @@ define module rpc as
     pub val String response_type;
     pub val int streaming_kind;
 
-    pub is_valid() -> bool {
+    pub is_valid(): bool {
       if self.contract_id < 0; do
         return false;
       fi
@@ -123,7 +123,7 @@ define module rpc as
   // A transport-neutral description of an HTTP handler. This deliberately
   // mirrors oreslang-http-routing RouteTarget metadata:
   // handler_id, pipeline_id, contract_id, and operation_id.
-  define class HttpHandlerDef as
+  pub define class HttpHandlerDef as
     pub val String method;
     pub val String path_template;
     pub val int handler_id;
@@ -136,7 +136,7 @@ define module rpc as
     pub val String response_type;
     pub val int streaming_kind;
 
-    pub is_valid() -> bool {
+    pub is_valid(): bool {
       if self.method == "" || self.path_template == ""; do
         return false;
       fi
@@ -153,49 +153,49 @@ define module rpc as
     }
   end
 
-  define class ServiceDef as
+  pub define class ServiceDef as
     pub val String name;
     val Array<RpcMethodDef> methods_value;
 
-    pub method_count() -> int {
+    pub method_count(): int {
       return self.methods_value.size;
     }
 
-    pub method_at(int index) -> RpcMethodDef {
+    pub method_at(int index): RpcMethodDef {
       return self.methods_value.get(index);
     }
   end
 
-  define class ContractSet as
+  pub define class ContractSet as
     val Array<MessageDef> messages_value;
     val Array<RpcMethodDef> methods_value;
     val Array<HttpHandlerDef> http_handlers_value;
 
-    pub message_count() -> int {
+    pub message_count(): int {
       return self.messages_value.size;
     }
 
-    pub message_at(int index) -> MessageDef {
+    pub message_at(int index): MessageDef {
       return self.messages_value.get(index);
     }
 
-    pub method_count() -> int {
+    pub method_count(): int {
       return self.methods_value.size;
     }
 
-    pub method_at(int index) -> RpcMethodDef {
+    pub method_at(int index): RpcMethodDef {
       return self.methods_value.get(index);
     }
 
-    pub http_handler_count() -> int {
+    pub http_handler_count(): int {
       return self.http_handlers_value.size;
     }
 
-    pub http_handler_at(int index) -> HttpHandlerDef {
+    pub http_handler_at(int index): HttpHandlerDef {
       return self.http_handlers_value.get(index);
     }
 
-    pub message_named(String name) -> Option<MessageDef> {
+    pub message_named(String name): Option<MessageDef> {
       for (const message_value of self.messages_value) {
         if message_value.name == name; do
           return Some(message_value);
@@ -204,7 +204,7 @@ define module rpc as
       return None;
     }
 
-    pub method_by_contract(int contract_id) -> Option<RpcMethodDef> {
+    pub method_by_contract(int contract_id): Option<RpcMethodDef> {
       for (const method_value of self.methods_value) {
         if method_value.contract_id == contract_id; do
           return Some(method_value);
@@ -213,7 +213,7 @@ define module rpc as
       return None;
     }
 
-    pub method_by_operation(String operation_id) -> Option<RpcMethodDef> {
+    pub method_by_operation(String operation_id): Option<RpcMethodDef> {
       for (const method_value of self.methods_value) {
         if method_value.operation_id == operation_id; do
           return Some(method_value);
@@ -222,7 +222,7 @@ define module rpc as
       return None;
     }
 
-    pub http_by_contract(int contract_id) -> Option<HttpHandlerDef> {
+    pub http_by_contract(int contract_id): Option<HttpHandlerDef> {
       for (const handler_value of self.http_handlers_value) {
         if handler_value.contract_id == contract_id; do
           return Some(handler_value);
@@ -232,12 +232,12 @@ define module rpc as
     }
   end
 
-  define class ContractBuilder as
+  pub define class ContractBuilder as
     let Array<MessageDef> messages_value = new Array<MessageDef>();
     let Array<RpcMethodDef> methods_value = new Array<RpcMethodDef>();
     let Array<HttpHandlerDef> http_handlers_value = new Array<HttpHandlerDef>();
 
-    pub add_message(MessageDef message_value) -> Result<bool, String> {
+    pub add_message(MessageDef message_value): Result<bool, String> {
       if !message_value.is_valid(); do
         return Err("invalid message definition");
       fi
@@ -252,7 +252,7 @@ define module rpc as
       return Ok(true);
     }
 
-    pub add_rpc(RpcMethodDef method_value) -> Result<bool, String> {
+    pub add_rpc(RpcMethodDef method_value): Result<bool, String> {
       if !method_value.is_valid(); do
         return Err("invalid RPC method definition");
       fi
@@ -273,7 +273,7 @@ define module rpc as
       return Ok(true);
     }
 
-    pub add_http(HttpHandlerDef handler_value) -> Result<bool, String> {
+    pub add_http(HttpHandlerDef handler_value): Result<bool, String> {
       if !handler_value.is_valid(); do
         return Err("invalid HTTP handler definition");
       fi
@@ -295,7 +295,7 @@ define module rpc as
     }
 
     // Adds an HTTP handler and derives the corresponding RPC method.
-    pub add_http_as_rpc(HttpHandlerDef handler_value) -> Result<bool, String> {
+    pub add_http_as_rpc(HttpHandlerDef handler_value): Result<bool, String> {
       val Result<bool, String> http_result = self.add_http(handler_value);
       if http_result.is_err(); do
         return http_result;
@@ -316,7 +316,7 @@ define module rpc as
       String path_template,
       int handler_id,
       int pipeline_id
-    ) -> Result<bool, String> {
+    ): Result<bool, String> {
       val Result<bool, String> rpc_result = self.add_rpc(method_value);
       if rpc_result.is_err(); do
         return rpc_result;
@@ -331,7 +331,7 @@ define module rpc as
       ));
     }
 
-    pub build() -> Result<ContractSet, String> {
+    pub build(): Result<ContractSet, String> {
       // Cross-reference every RPC input/output against the message table.
       for (const method_value of self.methods_value) {
         let bool request_found = false;
@@ -386,43 +386,43 @@ define module rpc as
     }
   end
 
-  pub fnc string_type() -> TypeRef {
+  pub fnc string_type(): TypeRef {
     return new TypeRef(0, "");
   }
 
-  pub fnc bool_type() -> TypeRef {
+  pub fnc bool_type(): TypeRef {
     return new TypeRef(1, "");
   }
 
-  pub fnc int32_type() -> TypeRef {
+  pub fnc int32_type(): TypeRef {
     return new TypeRef(2, "");
   }
 
-  pub fnc int64_type() -> TypeRef {
+  pub fnc int64_type(): TypeRef {
     return new TypeRef(3, "");
   }
 
-  pub fnc float32_type() -> TypeRef {
+  pub fnc float32_type(): TypeRef {
     return new TypeRef(4, "");
   }
 
-  pub fnc float64_type() -> TypeRef {
+  pub fnc float64_type(): TypeRef {
     return new TypeRef(5, "");
   }
 
-  pub fnc bytes_type() -> TypeRef {
+  pub fnc bytes_type(): TypeRef {
     return new TypeRef(6, "");
   }
 
-  pub fnc message_type(String name) -> TypeRef {
+  pub fnc message_type(String name): TypeRef {
     return new TypeRef(7, name);
   }
 
-  pub fnc timestamp_type() -> TypeRef {
+  pub fnc timestamp_type(): TypeRef {
     return new TypeRef(8, "");
   }
 
-  pub fnc any_type() -> TypeRef {
+  pub fnc any_type(): TypeRef {
     return new TypeRef(9, "");
   }
 
@@ -433,11 +433,11 @@ define module rpc as
     TypeRef type_value,
     bool required,
     bool repeated
-  ) -> FieldDef {
+  ): FieldDef {
     return new FieldDef(name, number, number_text, type_value, required, repeated);
   }
 
-  pub fnc message(String name, Array<FieldDef> fields) -> MessageDef {
+  pub fnc message(String name, Array<FieldDef> fields): MessageDef {
     let Array<FieldDef> copied = new Array<FieldDef>();
     for (const field_value of fields) {
       copied.add(field_value);
@@ -452,7 +452,7 @@ define module rpc as
     String operation_id,
     String request_type,
     String response_type
-  ) -> RpcMethodDef {
+  ): RpcMethodDef {
     return new RpcMethodDef(
       contract_id,
       service,
@@ -472,7 +472,7 @@ define module rpc as
     String request_type,
     String response_type,
     int streaming_kind
-  ) -> RpcMethodDef {
+  ): RpcMethodDef {
     return new RpcMethodDef(
       contract_id,
       service,
@@ -495,7 +495,7 @@ define module rpc as
     String rpc_name,
     String request_type,
     String response_type
-  ) -> HttpHandlerDef {
+  ): HttpHandlerDef {
     return new HttpHandlerDef(
       method,
       path_template,
@@ -511,7 +511,7 @@ define module rpc as
     );
   }
 
-  pub fnc rpc_from_http(HttpHandlerDef handler_value) -> RpcMethodDef {
+  pub fnc rpc_from_http(HttpHandlerDef handler_value): RpcMethodDef {
     return new RpcMethodDef(
       handler_value.contract_id,
       handler_value.rpc_service,
@@ -529,7 +529,7 @@ define module rpc as
     String path_template,
     int handler_id,
     int pipeline_id
-  ) -> HttpHandlerDef {
+  ): HttpHandlerDef {
     return new HttpHandlerDef(
       http_method,
       path_template,
@@ -545,7 +545,7 @@ define module rpc as
     );
   }
 
-  pub fnc builder() -> ContractBuilder {
+  pub fnc builder(): ContractBuilder {
     return new ContractBuilder();
   }
 
@@ -557,7 +557,7 @@ define module rpc as
   // A generator document is a sequence of String fragments. Consumers can
   // stream fragments directly to a file/socket/stdout without Java
   // StringBuilder interop or requiring String concatenation in the core.
-  define class TextDocument as
+  pub define class TextDocument as
     let Array<String> parts_value = new Array<String>();
 
     pub write(String value): void {
@@ -581,16 +581,16 @@ define module rpc as
       return;
     }
 
-    pub part_count() -> int {
+    pub part_count(): int {
       return self.parts_value.size;
     }
 
-    pub part_at(int index) -> String {
+    pub part_at(int index): String {
       return self.parts_value.get(index);
     }
   end
 
-  define class GeneratedBundle as
+  pub define class GeneratedBundle as
     pub val TextDocument json_schema;
     pub val TextDocument protobuf;
     pub val TextDocument messagepack;
@@ -691,7 +691,7 @@ define module rpc as
     return;
   }
 
-  pub fnc json_schema(ContractSet contracts, String schema_id) -> TextDocument {
+  pub fnc json_schema(ContractSet contracts, String schema_id): TextDocument {
     let TextDocument out = new TextDocument();
     out.line("{");
     out.write("  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",");
@@ -769,7 +769,7 @@ define module rpc as
     return out;
   }
 
-  pub fnc protobuf(ContractSet contracts, String package_name) -> TextDocument {
+  pub fnc protobuf(ContractSet contracts, String package_name): TextDocument {
     let TextDocument out = new TextDocument();
     out.line("syntax = \"proto3\";");
     out.write("package ");
@@ -852,7 +852,7 @@ define module rpc as
   // This library therefore emits a deliberately tiny shared mpackdef v1.
   // Integer field numbers are canonical map keys, making schema evolution and
   // polyglot code generation deterministic.
-  pub fnc messagepack_defs(ContractSet contracts) -> TextDocument {
+  pub fnc messagepack_defs(ContractSet contracts): TextDocument {
     let TextDocument out = new TextDocument();
     out.line("mpackdef 1");
     out.line("encoding map-int-keys");
@@ -916,7 +916,7 @@ define module rpc as
     return out;
   }
 
-  pub fnc typespec(ContractSet contracts, String namespace_name) -> TextDocument {
+  pub fnc typespec(ContractSet contracts, String namespace_name): TextDocument {
     let TextDocument out = new TextDocument();
     out.line("import \"@typespec/http\";");
     out.write("using TypeSpec.Http;");
@@ -993,7 +993,7 @@ define module rpc as
     String json_schema_id,
     String proto_package,
     String typespec_namespace
-  ) -> GeneratedBundle {
+  ): GeneratedBundle {
     return new GeneratedBundle(
       json_schema(contracts, json_schema_id),
       protobuf(contracts, proto_package),

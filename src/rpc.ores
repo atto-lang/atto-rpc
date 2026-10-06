@@ -241,6 +241,18 @@ define module rpc as
     let Array<RpcMethodDef> methods_value = new Array<RpcMethodDef>();
     let Array<HttpHandlerDef> http_handlers_value = new Array<HttpHandlerDef>();
 
+    pub message_count(): int {
+      return self.messages_value.size;
+    }
+
+    pub method_count(): int {
+      return self.methods_value.size;
+    }
+
+    pub http_handler_count(): int {
+      return self.http_handlers_value.size;
+    }
+
     pub add_message(MessageDef message_value): Result<bool, String> {
       if !message_value.is_valid(); do
         return Err("invalid message definition");

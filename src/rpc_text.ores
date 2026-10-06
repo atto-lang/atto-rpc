@@ -1,0 +1,53 @@
+// Native streaming-friendly text document.
+//
+// Generators append immutable String fragments and explicit newlines. This
+// avoids host StringBuilder interop and does not require concatenation support.
+
+define module rpc_text as
+
+  define class TextDocument as
+    let Array<String> parts_value = new Array<String>();
+
+    pub write(String value): void {
+      self.parts_value.add(value);
+      return;
+    }
+
+    pub space(): void {
+      self.parts_value.add(" ");
+      return;
+    }
+
+    pub newline(): void {
+      self.parts_value.add("\n");
+      return;
+    }
+
+    pub line(String value): void {
+      self.parts_value.add(value);
+      self.parts_value.add("\n");
+      return;
+    }
+
+    pub part_count() -> int {
+      return self.parts_value.size;
+    }
+
+    pub part_at(int index) -> String {
+      return self.parts_value.get(index);
+    }
+
+    pub copy() -> TextDocument {
+      let TextDocument copied = new TextDocument();
+      for (const part of self.parts_value) {
+        copied.write(part);
+      }
+      return copied;
+    }
+  end
+
+  pub fnc document() -> TextDocument {
+    return new TextDocument();
+  }
+
+end

@@ -549,4 +549,457 @@ define module rpc as
     return new ContractBuilder();
   }
 
+
+  // ------------------------------------------------------------------------
+  // Native code generation
+  // ------------------------------------------------------------------------
+
+  // A generator document is a sequence of String fragments. Consumers can
+  // stream fragments directly to a file/socket/stdout without Java
+  // StringBuilder interop or requiring String concatenation in the core.
+  define class TextDocument as
+    let Array<String> parts_value = new Array<String>();
+
+    pub write(String value): void {
+      self.parts_value.add(value);
+      return;
+    }
+
+    pub space(): void {
+      self.parts_value.add(" ");
+      return;
+    }
+
+    pub newline(): void {
+      self.parts_value.add("\n");
+      return;
+    }
+
+    pub line(String value): void {
+      self.parts_value.add(value);
+      self.parts_value.add("\n");
+      return;
+    }
+
+    pub part_count() -> int {
+      return self.parts_value.size;
+    }
+
+    pub part_at(int index) -> String {
+      return self.parts_value.get(index);
+    }
+  end
+
+  define class GeneratedBundle as
+    pub val TextDocument json_schema;
+    pub val TextDocument protobuf;
+    pub val TextDocument messagepack;
+    pub val TextDocument typespec;
+  end
+
+  emit_json_type(TextDocument out, TypeRef type_value): void {
+    if type_value.kind == 0; do
+      out.write("{\"type\":\"string\"}");
+    elseif type_value.kind == 1; do
+      out.write("{\"type\":\"boolean\"}");
+    elseif type_value.kind == 2 || type_value.kind == 3; do
+      out.write("{\"type\":\"integer\"}");
+    elseif type_value.kind == 4 || type_value.kind == 5; do
+      out.write("{\"type\":\"number\"}");
+    elseif type_value.kind == 6; do
+      out.write("{\"type\":\"string\",\"contentEncoding\":\"base64\"}");
+    elseif type_value.kind == 7; do
+      out.write("{\"$ref\":\"#/$defs/");
+      out.write(type_value.name);
+      out.write("\"}");
+    elseif type_value.kind == 8; do
+      out.write("{\"type\":\"string\",\"format\":\"date-time\"}");
+    else
+      out.write("{}");
+    fi
+    return;
+  }
+
+  emit_proto_type(TextDocument out, TypeRef type_value): void {
+    if type_value.kind == 0; do
+      out.write("string");
+    elseif type_value.kind == 1; do
+      out.write("bool");
+    elseif type_value.kind == 2; do
+      out.write("int32");
+    elseif type_value.kind == 3; do
+      out.write("int64");
+    elseif type_value.kind == 4; do
+      out.write("float");
+    elseif type_value.kind == 5; do
+      out.write("double");
+    elseif type_value.kind == 6; do
+      out.write("bytes");
+    elseif type_value.kind == 7; do
+      out.write(type_value.name);
+    elseif type_value.kind == 8; do
+      out.write("google.protobuf.Timestamp");
+    else
+      out.write("google.protobuf.Value");
+    fi
+    return;
+  }
+
+  emit_typespec_type(TextDocument out, TypeRef type_value): void {
+    if type_value.kind == 0; do
+      out.write("string");
+    elseif type_value.kind == 1; do
+      out.write("boolean");
+    elseif type_value.kind == 2; do
+      out.write("int32");
+    elseif type_value.kind == 3; do
+      out.write("int64");
+    elseif type_value.kind == 4; do
+      out.write("float32");
+    elseif type_value.kind == 5; do
+      out.write("float64");
+    elseif type_value.kind == 6; do
+      out.write("bytes");
+    elseif type_value.kind == 7; do
+      out.write(type_value.name);
+    elseif type_value.kind == 8; do
+      out.write("utcDateTime");
+    else
+      out.write("unknown");
+    fi
+    return;
+  }
+
+  emit_msgpack_type(TextDocument out, TypeRef type_value): void {
+    if type_value.kind == 0; do
+      out.write("str");
+    elseif type_value.kind == 1; do
+      out.write("bool");
+    elseif type_value.kind == 2 || type_value.kind == 3; do
+      out.write("int");
+    elseif type_value.kind == 4 || type_value.kind == 5; do
+      out.write("float");
+    elseif type_value.kind == 6; do
+      out.write("bin");
+    elseif type_value.kind == 7; do
+      out.write(type_value.name);
+    elseif type_value.kind == 8; do
+      out.write("timestamp");
+    else
+      out.write("any");
+    fi
+    return;
+  }
+
+  pub fnc json_schema(ContractSet contracts, String schema_id) -> TextDocument {
+    let TextDocument out = new TextDocument();
+    out.line("{");
+    out.write("  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",");
+    out.newline();
+    out.write("  \"$id\": \"");
+    out.write(schema_id);
+    out.write("\",");
+    out.newline();
+    out.line("  \"$defs\": {");
+
+    for (let int message_index = 0; message_index < contracts.message_count(); message_index = message_index + 1) {
+      val MessageDef message_value = contracts.message_at(message_index);
+      out.write("    \"");
+      out.write(message_value.name);
+      out.line("\": {");
+      out.line("      \"type\": \"object\",");
+      out.line("      \"additionalProperties\": false,");
+      out.line("      \"properties\": {");
+
+      for (let int field_index = 0; field_index < message_value.field_count(); field_index = field_index + 1) {
+        val FieldDef field_value = message_value.field_at(field_index);
+        out.write("        \"");
+        out.write(field_value.name);
+        out.write("\": ");
+
+        if field_value.repeated; do
+          out.write("{\"type\":\"array\",\"items\":");
+          emit_json_type(out, field_value.type_value);
+          out.write("}");
+        else
+          emit_json_type(out, field_value.type_value);
+        fi
+
+        if field_index + 1 < message_value.field_count(); do
+          out.write(",");
+        fi
+        out.newline();
+      }
+
+      out.line("      },");
+
+      let int required_count = 0;
+      for (let int required_index = 0; required_index < message_value.field_count(); required_index = required_index + 1) {
+        if message_value.field_at(required_index).required; do
+          required_count = required_count + 1;
+        fi
+      }
+
+      out.write("      \"required\": [");
+      let int emitted_required = 0;
+      for (let int required_index = 0; required_index < message_value.field_count(); required_index = required_index + 1) {
+        val FieldDef required_field = message_value.field_at(required_index);
+        if required_field.required; do
+          if emitted_required > 0; do
+            out.write(", ");
+          fi
+          out.write("\"");
+          out.write(required_field.name);
+          out.write("\"");
+          emitted_required = emitted_required + 1;
+        fi
+      }
+      out.newline();
+      out.write("      ]");
+      out.newline();
+      out.write("    }");
+      if message_index + 1 < contracts.message_count(); do
+        out.write(",");
+      fi
+      out.newline();
+    }
+
+    out.line("  }");
+    out.line("}");
+    return out;
+  }
+
+  pub fnc protobuf(ContractSet contracts, String package_name) -> TextDocument {
+    let TextDocument out = new TextDocument();
+    out.line("syntax = \"proto3\";");
+    out.write("package ");
+    out.write(package_name);
+    out.line(";");
+    out.newline();
+    out.line("import \"google/protobuf/struct.proto\";");
+    out.line("import \"google/protobuf/timestamp.proto\";");
+    out.newline();
+
+    for (let int message_index = 0; message_index < contracts.message_count(); message_index = message_index + 1) {
+      val MessageDef message_value = contracts.message_at(message_index);
+      out.write("message ");
+      out.write(message_value.name);
+      out.line(" {");
+
+      for (let int field_index = 0; field_index < message_value.field_count(); field_index = field_index + 1) {
+        val FieldDef field_value = message_value.field_at(field_index);
+        out.write("  ");
+        if field_value.repeated; do
+          out.write("repeated ");
+        elseif !field_value.required; do
+          out.write("optional ");
+        fi
+        emit_proto_type(out, field_value.type_value);
+        out.space();
+        out.write(field_value.name);
+        out.write(" = ");
+        out.write(field_value.number_text);
+        out.line(";");
+      }
+
+      out.line("}");
+      out.newline();
+    }
+
+    // Emit one service block per unique service name.
+    for (let int method_index = 0; method_index < contracts.method_count(); method_index = method_index + 1) {
+      val RpcMethodDef method_value = contracts.method_at(method_index);
+      let bool seen = false;
+      for (let int earlier = 0; earlier < method_index; earlier = earlier + 1) {
+        if contracts.method_at(earlier).service == method_value.service; do
+          seen = true;
+        fi
+      }
+
+      if !seen; do
+        out.write("service ");
+        out.write(method_value.service);
+        out.line(" {");
+
+        for (let int sibling_index = 0; sibling_index < contracts.method_count(); sibling_index = sibling_index + 1) {
+          val RpcMethodDef sibling = contracts.method_at(sibling_index);
+          if sibling.service == method_value.service; do
+            out.write("  rpc ");
+            out.write(sibling.name);
+            out.write("(");
+            if sibling.streaming_kind == 2 || sibling.streaming_kind == 3; do
+              out.write("stream ");
+            fi
+            out.write(sibling.request_type);
+            out.write(") returns (");
+            if sibling.streaming_kind == 1 || sibling.streaming_kind == 3; do
+              out.write("stream ");
+            fi
+            out.write(sibling.response_type);
+            out.line(");");
+          fi
+        }
+
+        out.line("}");
+        out.newline();
+      fi
+    }
+
+    return out;
+  }
+
+  // MessagePack has no universally adopted schema IDL equivalent to .proto.
+  // This library therefore emits a deliberately tiny shared mpackdef v1.
+  // Integer field numbers are canonical map keys, making schema evolution and
+  // polyglot code generation deterministic.
+  pub fnc messagepack_defs(ContractSet contracts) -> TextDocument {
+    let TextDocument out = new TextDocument();
+    out.line("mpackdef 1");
+    out.line("encoding map-int-keys");
+    out.newline();
+
+    for (let int message_index = 0; message_index < contracts.message_count(); message_index = message_index + 1) {
+      val MessageDef message_value = contracts.message_at(message_index);
+      out.write("message ");
+      out.write(message_value.name);
+      out.line(" {");
+
+      for (let int field_index = 0; field_index < message_value.field_count(); field_index = field_index + 1) {
+        val FieldDef field_value = message_value.field_at(field_index);
+        out.write("  ");
+        out.write(field_value.number_text);
+        out.space();
+        out.write(field_value.name);
+        out.write(": ");
+        if field_value.repeated; do
+          out.write("array<");
+          emit_msgpack_type(out, field_value.type_value);
+          out.write(">");
+        else
+          emit_msgpack_type(out, field_value.type_value);
+        fi
+        if field_value.required; do
+          out.write(" required");
+        else
+          out.write(" optional");
+        fi
+        out.newline();
+      }
+
+      out.line("}");
+      out.newline();
+    }
+
+    for (let int method_index = 0; method_index < contracts.method_count(); method_index = method_index + 1) {
+      val RpcMethodDef method_value = contracts.method_at(method_index);
+      out.write("rpc ");
+      out.write(method_value.service);
+      out.write(".");
+      out.write(method_value.name);
+      out.write("(");
+      out.write(method_value.request_type);
+      out.write(") -> ");
+      out.write(method_value.response_type);
+      if method_value.streaming_kind != 0; do
+        out.write(" streaming=");
+        if method_value.streaming_kind == 1; do
+          out.write("server");
+        elseif method_value.streaming_kind == 2; do
+          out.write("client");
+        else
+          out.write("bidi");
+        fi
+      fi
+      out.newline();
+    }
+
+    return out;
+  }
+
+  pub fnc typespec(ContractSet contracts, String namespace_name) -> TextDocument {
+    let TextDocument out = new TextDocument();
+    out.line("import \"@typespec/http\";");
+    out.write("using TypeSpec.Http;");
+    out.newline();
+    out.write("namespace ");
+    out.write(namespace_name);
+    out.line(";");
+    out.newline();
+
+    for (let int message_index = 0; message_index < contracts.message_count(); message_index = message_index + 1) {
+      val MessageDef message_value = contracts.message_at(message_index);
+      out.write("model ");
+      out.write(message_value.name);
+      out.line(" {");
+
+      for (let int field_index = 0; field_index < message_value.field_count(); field_index = field_index + 1) {
+        val FieldDef field_value = message_value.field_at(field_index);
+        out.write("  ");
+        out.write(field_value.name);
+        if !field_value.required; do
+          out.write("?");
+        fi
+        out.write(": ");
+        if field_value.repeated; do
+          emit_typespec_type(out, field_value.type_value);
+          out.write("[]");
+        else
+          emit_typespec_type(out, field_value.type_value);
+        fi
+        out.line(";");
+      }
+
+      out.line("}");
+      out.newline();
+    }
+
+    for (let int method_index = 0; method_index < contracts.method_count(); method_index = method_index + 1) {
+      val RpcMethodDef method_value = contracts.method_at(method_index);
+      val Option<HttpHandlerDef> http_value = contracts.http_by_contract(method_value.contract_id);
+
+      if http_value.is_some(); do
+        val HttpHandlerDef handler_value = http_value.unwrap();
+        out.write("@route(\"");
+        out.write(handler_value.path_template);
+        out.line("\")");
+        if handler_value.method == "GET"; do
+          out.line("@get");
+        elseif handler_value.method == "POST"; do
+          out.line("@post");
+        elseif handler_value.method == "PUT"; do
+          out.line("@put");
+        elseif handler_value.method == "PATCH"; do
+          out.line("@patch");
+        elseif handler_value.method == "DELETE"; do
+          out.line("@delete");
+        fi
+      fi
+
+      out.write("op ");
+      out.write(method_value.name);
+      out.write("(request: ");
+      out.write(method_value.request_type);
+      out.write("): ");
+      out.write(method_value.response_type);
+      out.line(";");
+      out.newline();
+    }
+
+    return out;
+  }
+
+  pub fnc generate_all(
+    ContractSet contracts,
+    String json_schema_id,
+    String proto_package,
+    String typespec_namespace
+  ) -> GeneratedBundle {
+    return new GeneratedBundle(
+      json_schema(contracts, json_schema_id),
+      protobuf(contracts, proto_package),
+      messagepack_defs(contracts),
+      typespec(contracts, typespec_namespace)
+    );
+  }
+
 end

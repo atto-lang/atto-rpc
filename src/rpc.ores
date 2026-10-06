@@ -245,9 +245,9 @@ define module rpc as
   end
 
   pub define class ContractBuilder as
-    let Array<MessageDef> messages_value = new Array<MessageDef>();
-    let Array<RpcMethodDef> methods_value = new Array<RpcMethodDef>();
-    let Array<HttpHandlerDef> http_handlers_value = new Array<HttpHandlerDef>();
+    let Array<MessageDef> messages_value = arr[];
+    let Array<RpcMethodDef> methods_value = arr[];
+    let Array<HttpHandlerDef> http_handlers_value = arr[];
 
     pub message_count(): int {
       return self.messages_value.size;
@@ -443,9 +443,9 @@ define module rpc as
         fi
       }
 
-      let Array<MessageDef> messages_copy = new Array<MessageDef>();
-      let Array<RpcMethodDef> methods_copy = new Array<RpcMethodDef>();
-      let Array<HttpHandlerDef> http_copy = new Array<HttpHandlerDef>();
+      let Array<MessageDef> messages_copy = arr[];
+      let Array<RpcMethodDef> methods_copy = arr[];
+      let Array<HttpHandlerDef> http_copy = arr[];
 
       for (const message_value of self.messages_value) {
         messages_copy.add(message_value);
@@ -529,7 +529,7 @@ define module rpc as
   }
 
   pub fnc message(String name, Array<FieldDef> fields): MessageDef {
-    let Array<FieldDef> copied = new Array<FieldDef>();
+    let Array<FieldDef> copied = arr[];
     for (const field_value of fields) {
       copied.add(field_value);
     }
@@ -677,7 +677,7 @@ define module rpc as
   // stream fragments directly to a file/socket/stdout without Java
   // StringBuilder interop or requiring String concatenation in the core.
   pub define class TextDocument as
-    let Array<String> parts_value = new Array<String>();
+    let Array<String> parts_value = arr[];
 
     pub write(String value): void {
       self.parts_value.add(value);

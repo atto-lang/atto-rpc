@@ -493,6 +493,22 @@ define module rpc as
     return new TypeRef(9, "");
   }
 
+  pub fnc unary_stream(): int {
+    return 0;
+  }
+
+  pub fnc server_stream(): int {
+    return 1;
+  }
+
+  pub fnc client_stream(): int {
+    return 2;
+  }
+
+  pub fnc bidi_stream(): int {
+    return 3;
+  }
+
   pub fnc field(
     String name,
     int number,
@@ -578,6 +594,34 @@ define module rpc as
     );
   }
 
+  pub fnc streaming_http_handler(
+    String method,
+    String path_template,
+    int handler_id,
+    int pipeline_id,
+    int contract_id,
+    String operation_id,
+    String rpc_service,
+    String rpc_name,
+    String request_type,
+    String response_type,
+    int streaming_kind
+  ): HttpHandlerDef {
+    return new HttpHandlerDef(
+      method,
+      path_template,
+      handler_id,
+      pipeline_id,
+      contract_id,
+      operation_id,
+      rpc_service,
+      rpc_name,
+      request_type,
+      response_type,
+      streaming_kind
+    );
+  }
+
   pub fnc rpc_from_http(HttpHandlerDef handler_value): RpcMethodDef {
     return new RpcMethodDef(
       handler_value.contract_id,
@@ -654,6 +698,15 @@ define module rpc as
 
     pub part_at(int index): String {
       return self.parts_value.get(index);
+    }
+
+    pub has_part(String expected): bool {
+      for (const part of self.parts_value) {
+        if part == expected; do
+          return true;
+        fi
+      }
+      return false;
     }
   end
 

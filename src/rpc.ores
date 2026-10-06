@@ -81,7 +81,7 @@ define module rpc as
         return false;
       fi
 
-      for (let int index = 0; index < self.fields_value.size; index = index + 1) {
+      for (let int index = 0; index < self.field_count(); index = index + 1) {
         val FieldDef field_value = self.fields_value.get(index);
         if !field_value.is_valid(); do
           return false;

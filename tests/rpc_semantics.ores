@@ -85,6 +85,29 @@ pub routine main(): void {
   stdio.println(bundle.typespec.part_count() > 20);
   stdio.println(bundle.typespec.part_at(0));
 
+  // Assert meaningful generator fragments, not only document sizes.
+  stdio.println(bundle.json_schema.has_part("  \"$defs\": {"));
+  stdio.println(bundle.protobuf.has_part("service "));
+  stdio.println(bundle.protobuf.has_part("GetUser"));
+  stdio.println(bundle.messagepack.has_part("mpackdef 1"));
+  stdio.println(bundle.typespec.has_part("@get"));
+
+  // Streaming RPC metadata reaches the gRPC emitter without magic integers.
+  let stream_builder = rpc.builder();
+  ok(stream_builder.add_message(GetUserRequest));
+  ok(stream_builder.add_message(User));
+  ok(stream_builder.add_rpc(rpc.streaming_rpc_method(
+    43,
+    "Users",
+    "WatchUsers",
+    "users.watch",
+    "GetUserRequest",
+    "User",
+    rpc.server_stream()
+  )));
+  val stream_contracts = stream_builder.build().unwrap();
+  stdio.println(rpc.protobuf(stream_contracts, "example.rpc").has_part("stream "));
+
   // Fail closed on duplicate wire field numbers.
   val Bad = rpc.message("Bad", arr[
     rpc.field("a", 1, "1", rpc.string_type(), true, false),

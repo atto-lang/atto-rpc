@@ -152,6 +152,14 @@ define module rpc as
       if self.method == "" || self.path_template == ""; then
         return false;
       fi
+      if self.method != "GET" &&
+         self.method != "POST" &&
+         self.method != "PUT" &&
+         self.method != "PATCH" &&
+         self.method != "DELETE" &&
+         self.method != "HEAD"; then
+        return false;
+      fi
       if self.handler_id < 0 || self.contract_id < 0; then
         return false;
       fi
@@ -1081,36 +1089,61 @@ define module rpc as
       out.newline();
     }
 
+    // TypeSpec operations are scoped by RPC service so identical method names
+    // in different services remain distinct, exactly like protobuf services.
     for (let int method_index = 0; method_index < contracts.method_count(); method_index = method_index + 1) {
-      val RpcMethodDef method_value = contracts.method_at(method_index);
-      val Option<HttpHandlerDef> http_value = contracts.http_by_contract(method_value.contract_id);
-
-      if http_value.is_some(); then
-        val HttpHandlerDef handler_value = http_value.unwrap();
-        out.write("@route(\"");
-        out.write(handler_value.path_template);
-        out.line("\")");
-        if handler_value.method == "GET"; then
-          out.line("@get");
-        elseif handler_value.method == "POST"; then
-          out.line("@post");
-        elseif handler_value.method == "PUT"; then
-          out.line("@put");
-        elseif handler_value.method == "PATCH"; then
-          out.line("@patch");
-        elseif handler_value.method == "DELETE"; then
-          out.line("@delete");
+      val RpcMethodDef first_method = contracts.method_at(method_index);
+      let bool service_seen = false;
+      for (let int earlier = 0; earlier < method_index; earlier = earlier + 1) {
+        if contracts.method_at(earlier).service == first_method.service; then
+          service_seen = true;
         fi
-      fi
+      }
 
-      out.write("op ");
-      out.write(method_value.name);
-      out.write("(request: ");
-      out.write(method_value.request_type);
-      out.write("): ");
-      out.write(method_value.response_type);
-      out.line(";");
-      out.newline();
+      if !service_seen; then
+        out.write("interface ");
+        out.write(first_method.service);
+        out.line(" {");
+
+        for (let int sibling_index = 0; sibling_index < contracts.method_count(); sibling_index = sibling_index + 1) {
+          val RpcMethodDef method_value = contracts.method_at(sibling_index);
+          if method_value.service == first_method.service; then
+            val Option<HttpHandlerDef> http_value = contracts.http_by_contract(method_value.contract_id);
+
+            if http_value.is_some(); then
+              val HttpHandlerDef handler_value = http_value.unwrap();
+              out.write("@route(\"");
+              out.write(handler_value.path_template);
+              out.line("\")");
+              if handler_value.method == "GET"; then
+                out.line("@get");
+              elseif handler_value.method == "POST"; then
+                out.line("@post");
+              elseif handler_value.method == "PUT"; then
+                out.line("@put");
+              elseif handler_value.method == "PATCH"; then
+                out.line("@patch");
+              elseif handler_value.method == "DELETE"; then
+                out.line("@delete");
+              elseif handler_value.method == "HEAD"; then
+                out.line("@head");
+              fi
+            fi
+
+            out.write("op ");
+            out.write(method_value.name);
+            out.write("(request: ");
+            out.write(method_value.request_type);
+            out.write("): ");
+            out.write(method_value.response_type);
+            out.line(";");
+            out.newline();
+          fi
+        }
+
+        out.line("}");
+        out.newline();
+      fi
     }
 
     return out;

@@ -1,7 +1,7 @@
 import module rpc from "../src/rpc";
 import module http_routing from "http_routing";
 
-pub routine main() -> void {
+pub routine main(): void {
   // One authoritative RPC definition can produce an HTTP handler binding.
   val get_user = rpc.rpc_method(
     42,

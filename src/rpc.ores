@@ -173,6 +173,30 @@ define module rpc as
     }
   end
 
+  // HTTP request-field locations:
+  // 0 path, 1 query, 2 header, 3 cookie.
+  //
+  // Fields without an explicit binding remain payload/body data. Keeping these
+  // bindings separate from MessageDef means the same logical RPC request type
+  // can be exposed through more than one HTTP shape without contaminating the
+  // transport-neutral message schema.
+  pub define class HttpFieldBindingDef as
+    pub val int contract_id;
+    pub val String field_name;
+    pub val String wire_name;
+    pub val int location;
+
+    pub is_valid(): bool {
+      if self.contract_id < 0; then
+        return false;
+      fi
+      if self.field_name == "" || self.wire_name == ""; then
+        return false;
+      fi
+      return self.location >= 0 && self.location <= 3;
+    }
+  end
+
   pub define class ServiceDef as
     pub val String name;
     val Array<RpcMethodDef> methods_value;
@@ -190,6 +214,7 @@ define module rpc as
     val Array<MessageDef> messages_value;
     val Array<RpcMethodDef> methods_value;
     val Array<HttpHandlerDef> http_handlers_value;
+    val Array<HttpFieldBindingDef> http_field_bindings_value;
 
     pub message_count(): int {
       return self.messages_value.size;
@@ -213,6 +238,24 @@ define module rpc as
 
     pub http_handler_at(int index): HttpHandlerDef {
       return self.http_handlers_value.get(index);
+    }
+
+    pub http_field_binding_count(): int {
+      return self.http_field_bindings_value.size;
+    }
+
+    pub http_field_binding_at(int index): HttpFieldBindingDef {
+      return self.http_field_bindings_value.get(index);
+    }
+
+    pub http_field_binding(int contract_id, String field_name): Option<HttpFieldBindingDef> {
+      for (const binding_value of self.http_field_bindings_value) {
+        if binding_value.contract_id == contract_id &&
+           binding_value.field_name == field_name; then
+          return Some(binding_value);
+        fi
+      }
+      return None;
     }
 
     pub message_named(String name): Option<MessageDef> {
@@ -256,6 +299,7 @@ define module rpc as
     let Array<MessageDef> messages_value = arr[];
     let Array<RpcMethodDef> methods_value = arr[];
     let Array<HttpHandlerDef> http_handlers_value = arr[];
+    let Array<HttpFieldBindingDef> http_field_bindings_value = arr[];
 
     pub message_count(): int {
       return self.messages_value.size;
@@ -267,6 +311,26 @@ define module rpc as
 
     pub http_handler_count(): int {
       return self.http_handlers_value.size;
+    }
+
+    pub http_field_binding_count(): int {
+      return self.http_field_bindings_value.size;
+    }
+
+    pub add_http_field_binding(HttpFieldBindingDef binding_value): Result<bool, String> {
+      if !binding_value.is_valid(); then
+        return Err("invalid HTTP field binding");
+      fi
+
+      for (const existing of self.http_field_bindings_value) {
+        if existing.contract_id == binding_value.contract_id &&
+           existing.field_name == binding_value.field_name; then
+          return Err("duplicate HTTP field binding");
+        fi
+      }
+
+      self.http_field_bindings_value.add(binding_value);
+      return Ok(true);
     }
 
     pub add_message(MessageDef message_value): Result<bool, String> {

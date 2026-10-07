@@ -153,3 +153,17 @@ The repository pins the compiler revision in `SOURCE_REF`.
 ## Compiler compatibility checkpoint (2026-10-06)
 
 This repository tracks the latest 10 compiler PRs as **unmerged proposals**, without changing its stable compiler pin or API behavior. See [docs/compiler-pr-sync.md](docs/compiler-pr-sync.md) for oreslang-rpc-specific migration invariants, dependencies and validation gates.
+
+## Runner CI and native-suite coverage
+
+The `Test runner contracts` workflow uses a compiler test double to check the
+runner's working directory, exact arguments, check-before-run ordering, output
+comparison, and failure propagation. It rejects floating SOURCE_REF values and
+dirty explicit compiler checkouts. Actions have read-only permissions and no
+persisted credentials.
+
+This is a runner gate, not evidence that the native RPC suite passes. The
+2026-10-07 probe against compiler `5ffc52d9297d175307094d530293c69f1cafc7cd`
+rejected mutation through readonly `messages_copy` in the library. The existing
+SOURCE_REF remains unchanged until ownership migration and golden-output
+validation succeed on a pinned compiler.

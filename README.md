@@ -149,3 +149,7 @@ See `docs/MESSAGEPACK.md` for compatibility rules.
 - TypeSpec generation
 
 The repository pins the compiler revision in `SOURCE_REF`.
+
+## Compiler compatibility checkpoint (2026-10-06)
+
+This repository tracks the latest 10 compiler PRs as **unmerged proposals**, without changing its stable compiler pin or API behavior. See [docs/compiler-pr-sync.md](docs/compiler-pr-sync.md) for oreslang-rpc-specific migration invariants, dependencies and validation gates.

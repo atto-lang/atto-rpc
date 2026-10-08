@@ -106,7 +106,7 @@ pub routine main(): void {
   val graph = contracts.build().unwrap();
 
   val outputs = rpc.generate_all(
-    &graph,
+    rt borrow graph,
     "https://example.test/schema/rpc",
     "example.rpc",
     "Example.Rpc"

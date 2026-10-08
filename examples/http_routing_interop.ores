@@ -13,7 +13,7 @@ pub routine main(): void {
   );
 
   val handler = rpc.http_from_rpc(
-    &get_user,
+    rt borrow get_user,
     "GET",
     "/users/{id}",
     1001,
@@ -51,7 +51,7 @@ pub routine main(): void {
     "User"
   );
 
-  val rpc_again = rpc.rpc_from_http(&discovered);
+  val rpc_again = rpc.rpc_from_http(rt borrow discovered);
   stdio.println(rpc_again.operation_id);
   return;
 }

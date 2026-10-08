@@ -296,10 +296,10 @@ define module rpc as
   end
 
   pub define class ContractBuilder as
-    let Array<MessageDef> messages_value = arr[];
-    let Array<RpcMethodDef> methods_value = arr[];
-    let Array<HttpHandlerDef> http_handlers_value = arr[];
-    let Array<HttpFieldBindingDef> http_field_bindings_value = arr[];
+    val Array<MessageDef> messages_value = arr[];
+    val Array<RpcMethodDef> methods_value = arr[];
+    val Array<HttpHandlerDef> http_handlers_value = arr[];
+    val Array<HttpFieldBindingDef> http_field_bindings_value = arr[];
 
     pub message_count(): int {
       return self.messages_value.size;
@@ -348,7 +348,7 @@ define module rpc as
       return Ok(true);
     }
 
-    check_rpc(&RpcMethodDef method_value): Result<bool, String> {
+    check_rpc(borrow RpcMethodDef method_value): Result<bool, String> {
       if !method_value.is_valid(); then
         return Err("invalid RPC method definition");
       fi
@@ -368,7 +368,7 @@ define module rpc as
       return Ok(true);
     }
 
-    check_http(&HttpHandlerDef handler_value): Result<bool, String> {
+    check_http(borrow HttpHandlerDef handler_value): Result<bool, String> {
       if !handler_value.is_valid(); then
         return Err("invalid HTTP handler definition");
       fi
@@ -389,7 +389,7 @@ define module rpc as
     }
 
     pub add_rpc(RpcMethodDef method_value): Result<bool, String> {
-      val Result<bool, String> checked = self.check_rpc(&method_value);
+      val Result<bool, String> checked = self.check_rpc(rt borrow method_value);
       if checked.is_err(); then
         return checked;
       fi
@@ -398,7 +398,7 @@ define module rpc as
     }
 
     pub add_http(HttpHandlerDef handler_value): Result<bool, String> {
-      val Result<bool, String> checked = self.check_http(&handler_value);
+      val Result<bool, String> checked = self.check_http(rt borrow handler_value);
       if checked.is_err(); then
         return checked;
       fi
@@ -408,12 +408,12 @@ define module rpc as
 
     // Transactional: neither collection changes unless both definitions pass.
     pub add_http_as_rpc(HttpHandlerDef handler_value): Result<bool, String> {
-      val RpcMethodDef method_value = rpc_from_http(&handler_value);
-      val Result<bool, String> http_checked = self.check_http(&handler_value);
+      val RpcMethodDef method_value = rpc_from_http(rt borrow handler_value);
+      val Result<bool, String> http_checked = self.check_http(rt borrow handler_value);
       if http_checked.is_err(); then
         return http_checked;
       fi
-      val Result<bool, String> rpc_checked = self.check_rpc(&method_value);
+      val Result<bool, String> rpc_checked = self.check_rpc(rt borrow method_value);
       if rpc_checked.is_err(); then
         return rpc_checked;
       fi
@@ -432,18 +432,18 @@ define module rpc as
       int pipeline_id
     ): Result<bool, String> {
       val HttpHandlerDef handler_value = http_from_rpc(
-        &method_value,
+        rt borrow method_value,
         http_method,
         path_template,
         handler_id,
         pipeline_id
       );
 
-      val Result<bool, String> rpc_checked = self.check_rpc(&method_value);
+      val Result<bool, String> rpc_checked = self.check_rpc(rt borrow method_value);
       if rpc_checked.is_err(); then
         return rpc_checked;
       fi
-      val Result<bool, String> http_checked = self.check_http(&handler_value);
+      val Result<bool, String> http_checked = self.check_http(rt borrow handler_value);
       if http_checked.is_err(); then
         return http_checked;
       fi
@@ -552,10 +552,10 @@ define module rpc as
         fi
       }
 
-      let Array<MessageDef> messages_copy = arr[];
-      let Array<RpcMethodDef> methods_copy = arr[];
-      let Array<HttpHandlerDef> http_copy = arr[];
-      let Array<HttpFieldBindingDef> http_field_bindings_copy = arr[];
+      val Array<MessageDef> messages_copy = arr[];
+      val Array<RpcMethodDef> methods_copy = arr[];
+      val Array<HttpHandlerDef> http_copy = arr[];
+      val Array<HttpFieldBindingDef> http_field_bindings_copy = arr[];
 
       for (const message_value of self.messages_value) {
         messages_copy.add(message_value);
@@ -729,7 +729,7 @@ define module rpc as
   }
 
   pub fnc message(String name, Array<FieldDef> fields): MessageDef {
-    let Array<FieldDef> copied = arr[];
+    val Array<FieldDef> copied = arr[];
     for (const field_value of fields) {
       copied.add(field_value);
     }
@@ -830,7 +830,7 @@ define module rpc as
     );
   }
 
-  pub fnc rpc_from_http(&HttpHandlerDef handler_value): RpcMethodDef {
+  pub fnc rpc_from_http(borrow HttpHandlerDef handler_value): RpcMethodDef {
     return new RpcMethodDef(
       handler_value.contract_id,
       handler_value.rpc_service,
@@ -843,7 +843,7 @@ define module rpc as
   }
 
   pub fnc http_from_rpc(
-    &RpcMethodDef method_value,
+    borrow RpcMethodDef method_value,
     String http_method,
     String path_template,
     int handler_id,
@@ -877,7 +877,7 @@ define module rpc as
   // stream fragments directly to a file/socket/stdout without Java
   // StringBuilder interop or requiring String concatenation in the core.
   pub define class TextDocument as
-    let Array<String> parts_value = arr[];
+    val Array<String> parts_value = arr[];
 
     pub write(String value): void {
       self.parts_value.add(value);
@@ -925,7 +925,7 @@ define module rpc as
     pub val TextDocument typespec;
   end
 
-  fnc emit_json_type(&mut TextDocument out, int type_kind, String type_name): void {
+  fnc emit_json_type(borrow mut TextDocument out, int type_kind, String type_name): void {
     if type_kind == 0; then
       out.write("{\"type\":\"string\"}");
     elseif type_kind == 1; then
@@ -948,7 +948,7 @@ define module rpc as
     return;
   }
 
-  fnc emit_proto_type(&mut TextDocument out, int type_kind, String type_name): void {
+  fnc emit_proto_type(borrow mut TextDocument out, int type_kind, String type_name): void {
     if type_kind == 0; then
       out.write("string");
     elseif type_kind == 1; then
@@ -973,7 +973,7 @@ define module rpc as
     return;
   }
 
-  fnc emit_typespec_type(&mut TextDocument out, int type_kind, String type_name): void {
+  fnc emit_typespec_type(borrow mut TextDocument out, int type_kind, String type_name): void {
     if type_kind == 0; then
       out.write("string");
     elseif type_kind == 1; then
@@ -998,7 +998,7 @@ define module rpc as
     return;
   }
 
-  fnc emit_msgpack_type(&mut TextDocument out, int type_kind, String type_name): void {
+  fnc emit_msgpack_type(borrow mut TextDocument out, int type_kind, String type_name): void {
     if type_kind == 0; then
       out.write("str");
     elseif type_kind == 1; then
@@ -1019,8 +1019,8 @@ define module rpc as
     return;
   }
 
-  pub fnc json_schema(&ContractSet contracts, String schema_id): TextDocument {
-    let TextDocument out = new TextDocument();
+  pub fnc json_schema(borrow ContractSet contracts, String schema_id): TextDocument {
+    val TextDocument out = new TextDocument();
     out.line("{");
     out.write("  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",");
     out.newline();
@@ -1047,10 +1047,10 @@ define module rpc as
 
         if field_value.repeated; then
           out.write("{\"type\":\"array\",\"items\":");
-          emit_json_type(&mut out, field_value.type_kind(), field_value.type_name());
+          emit_json_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
           out.write("}");
         else
-          emit_json_type(&mut out, field_value.type_kind(), field_value.type_name());
+          emit_json_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
         fi
 
         if field_index + 1 < message_value.field_count(); then
@@ -1097,8 +1097,8 @@ define module rpc as
     return out;
   }
 
-  pub fnc protobuf(&ContractSet contracts, String package_name): TextDocument {
-    let TextDocument out = new TextDocument();
+  pub fnc protobuf(borrow ContractSet contracts, String package_name): TextDocument {
+    val TextDocument out = new TextDocument();
     out.line("syntax = \"proto3\";");
     out.write("package ");
     out.write(package_name);
@@ -1122,7 +1122,7 @@ define module rpc as
         elseif !field_value.required; then
           out.write("optional ");
         fi
-        emit_proto_type(&mut out, field_value.type_kind(), field_value.type_name());
+        emit_proto_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
         out.space();
         out.write(field_value.name);
         out.write(" = ");
@@ -1180,8 +1180,8 @@ define module rpc as
   // This library therefore emits a deliberately tiny shared mpackdef v1.
   // Integer field numbers are canonical map keys, making schema evolution and
   // polyglot code generation deterministic.
-  pub fnc messagepack_defs(&ContractSet contracts): TextDocument {
-    let TextDocument out = new TextDocument();
+  pub fnc messagepack_defs(borrow ContractSet contracts): TextDocument {
+    val TextDocument out = new TextDocument();
     out.line("mpackdef 1");
     out.line("encoding map-int-keys");
     out.newline();
@@ -1201,10 +1201,10 @@ define module rpc as
         out.write(": ");
         if field_value.repeated; then
           out.write("array<");
-          emit_msgpack_type(&mut out, field_value.type_kind(), field_value.type_name());
+          emit_msgpack_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
           out.write(">");
         else
-          emit_msgpack_type(&mut out, field_value.type_kind(), field_value.type_name());
+          emit_msgpack_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
         fi
         if field_value.required; then
           out.write(" required");
@@ -1244,8 +1244,8 @@ define module rpc as
     return out;
   }
 
-  pub fnc typespec(&ContractSet contracts, String namespace_name): TextDocument {
-    let TextDocument out = new TextDocument();
+  pub fnc typespec(borrow ContractSet contracts, String namespace_name): TextDocument {
+    val TextDocument out = new TextDocument();
     out.line("import \"@typespec/http\";");
     out.write("using TypeSpec.Http;");
     out.newline();
@@ -1269,10 +1269,10 @@ define module rpc as
         fi
         out.write(": ");
         if field_value.repeated; then
-          emit_typespec_type(&mut out, field_value.type_kind(), field_value.type_name());
+          emit_typespec_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
           out.write("[]");
         else
-          emit_typespec_type(&mut out, field_value.type_kind(), field_value.type_name());
+          emit_typespec_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
         fi
         out.line(";");
       }
@@ -1326,10 +1326,10 @@ define module rpc as
             fi
             out.write(": ");
             if field_value.repeated; then
-              emit_typespec_type(&mut out, field_value.type_kind(), field_value.type_name());
+              emit_typespec_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
               out.write("[]");
             else
-              emit_typespec_type(&mut out, field_value.type_kind(), field_value.type_name());
+              emit_typespec_type(rt borrow mut out, field_value.type_kind(), field_value.type_name());
             fi
             out.line(";");
           }
@@ -1410,7 +1410,7 @@ define module rpc as
   }
 
   pub fnc generate_all(
-    &ContractSet contracts,
+    borrow ContractSet contracts,
     String json_schema_id,
     String proto_package,
     String typespec_namespace

@@ -36,6 +36,18 @@ export RUNNER_PROJECT="$project" RUNNER_LOG="$tmp/invocations"
 export ORESLANG_COMPILER="$tmp/bin/compiler"
 unset ORESLANG_SOURCE_DIR
 cd "$tmp"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "missing compiler source provenance accepted" >&2
+  exit 1
+fi
+grep -q 'Set ORESLANG_SOURCE_DIR' "$tmp/output"
+mkdir "$tmp/source"
+git -C "$tmp/source" init -q
+printf 'compiler\n' > "$tmp/source/tracked"
+git -C "$tmp/source" add tracked
+git -C "$tmp/source" -c user.name=Runner -c user.email=runner@example.invalid commit -qm fixture
+git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
+export ORESLANG_SOURCE_DIR="$tmp/source"
 bash "$project/scripts/test.sh"
 test "$(cat "$RUNNER_LOG")" = $'check\nrun'
 for scenario in check-failure runtime-failure wrong-output; do
@@ -58,11 +70,6 @@ if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
   exit 1
 fi
 grep -q 'full lowercase Git commit SHA' "$tmp/output"
-mkdir "$tmp/source"
-git -C "$tmp/source" init -q
-printf 'compiler\n' > "$tmp/source/tracked"
-git -C "$tmp/source" add tracked
-git -C "$tmp/source" -c user.name=Runner -c user.email=runner@example.invalid commit -qm fixture
 git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
 ORESLANG_SOURCE_DIR="$tmp/source" bash "$project/scripts/test.sh"
 printf 'dirty\n' >> "$tmp/source/tracked"
@@ -71,4 +78,17 @@ if ORESLANG_SOURCE_DIR="$tmp/source" bash "$project/scripts/test.sh" > "$tmp/out
   exit 1
 fi
 grep -q 'must be clean' "$tmp/output"
+git -C "$tmp/source" restore tracked
+# A failed status command must not be mistaken for an empty/clean status.
+git() {
+  if [[ "$*" == *" status "* ]]; then return 128; fi
+  command git "$@"
+}
+export -f git
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "unreadable compiler status accepted" >&2
+  exit 1
+fi
+grep -q 'cannot inspect compiler checkout status' "$tmp/output"
+unset -f git
 echo "runner contracts: PASS"

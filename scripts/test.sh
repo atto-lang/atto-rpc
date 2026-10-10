@@ -15,12 +15,17 @@ if ! command -v "$compiler" >/dev/null 2>&1 && [[ ! -x "$compiler" ]]; then
   exit 69
 fi
 
-if [[ -n "${ORESLANG_SOURCE_DIR:-}" ]]; then
+: "${ORESLANG_SOURCE_DIR:?Set ORESLANG_SOURCE_DIR to the SOURCE_REF compiler checkout}"
+if [[ -n "$ORESLANG_SOURCE_DIR" ]]; then
   if [[ "$(git -C "$ORESLANG_SOURCE_DIR" rev-parse --show-toplevel)" != "$(cd "$ORESLANG_SOURCE_DIR" && pwd -P)" ]]; then
     echo "ORESLANG_SOURCE_DIR must be its own Git checkout" >&2
     exit 65
   fi
-  if [[ -n "$(git -C "$ORESLANG_SOURCE_DIR" status --porcelain --untracked-files=all)" ]]; then
+  source_status="$(git -C "$ORESLANG_SOURCE_DIR" status --porcelain --untracked-files=all)" || {
+    echo "cannot inspect compiler checkout status" >&2
+    exit 65
+  }
+  if [[ -n "$source_status" ]]; then
     echo "compiler source checkout must be clean" >&2
     exit 65
   fi

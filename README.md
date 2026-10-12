@@ -167,3 +167,8 @@ This is a runner gate, not evidence that the native RPC suite passes. The
 rejected mutation through readonly `messages_copy` in the library. The existing
 SOURCE_REF remains unchanged until ownership migration and golden-output
 validation succeed on a pinned compiler.
+
+## Backend compatibility
+
+See [the compiler compatibility contract](docs/BACKENDS.md) for pinned Java/LLVM
+revisions, reproducible checks, and unsupported features.

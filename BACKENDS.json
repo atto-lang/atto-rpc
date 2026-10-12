@@ -8,8 +8,14 @@
     "pin": "LLVM_SOURCE_REF",
     "execution": "unsupported",
     "rejection_probes": [
-      "tests/rpc_semantics.ores",
-      "src/rpc.ores"
+      {
+        "path": "tests/rpc_semantics.ores",
+        "diagnostic": "oreslang-llvmc: expected fnc or routine at byte 0"
+      },
+      {
+        "path": "src/rpc.ores",
+        "diagnostic": "oreslang-llvmc: expected fnc or routine at byte 457"
+      }
     ]
   }
 }

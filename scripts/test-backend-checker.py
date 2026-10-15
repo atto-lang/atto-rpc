@@ -87,4 +87,19 @@ class BackendChecks(unittest.TestCase):
             with patch.object(checker,'git',side_effect=subprocess.CalledProcessError(128,['git'])):
                 with self.assertRaises(subprocess.CalledProcessError): checker.require_source('BACKEND_TEST_SOURCE','SOURCE_REF')
 
+class BoundedCompilerOutput(unittest.TestCase):
+    def test_real_process_streams_preserved(self):
+        result = checker.run_bounded([sys.executable, '-c', "import sys;print('IR');print('diagnostic',file=sys.stderr);sys.exit(1)"])
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (1, 'IR\n', 'diagnostic\n'))
+    def test_output_floods_fail_before_contract_admission(self):
+        for fd in (1, 2):
+            with self.subTest(fd=fd), self.assertRaisesRegex(RuntimeError, 'output budget'):
+                checker.run_bounded([sys.executable, '-c', f"import os;os.write({fd},b'x'*2000000)"], max_bytes=32768)
+    def test_timeout_kills_process(self):
+        with self.assertRaises(subprocess.TimeoutExpired):
+            checker.run_bounded([sys.executable, '-c', 'import time;time.sleep(10)'], timeout=0.1)
+    def test_invalid_utf8_rejected(self):
+        with self.assertRaises(UnicodeDecodeError):
+            checker.run_bounded([sys.executable, '-c', "import os;os.write(1,bytes([255]))"])
+
 if __name__ == '__main__': unittest.main()

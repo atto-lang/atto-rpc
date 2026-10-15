@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+from bounded_process import run_bounded
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -87,12 +88,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix='ores-backend-') as directory:
         baseline = Path(directory) / 'baseline.ores'
         baseline.write_text('pub fnc main(): int { return 42; }\n')
-        positive = subprocess.run([str(compiler), str(baseline)], capture_output=True, text=True, timeout=30)
+        positive = run_bounded([str(compiler), str(baseline)])
         if positive.returncode or 'define i64 @main(' not in positive.stdout:
             raise RuntimeError('LLVM positive control failed; rejection is not evidence of compatibility: ' + positive.stderr)
         for probe in contract['llvm']['rejection_probes']:
             entry = local_file(probe['path'])
-            result = subprocess.run([str(compiler), str(entry)], capture_output=True, text=True, timeout=30)
+            result = run_bounded([str(compiler), str(entry)])
             check_rejection(result, probe)
             print(f"LLVM rejected {probe['path']}: {result.stderr.strip()}")
     print('LLVM rejection contract: PASS (package execution remains unsupported)')

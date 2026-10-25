@@ -106,7 +106,7 @@ pub routine main(): void {
   val graph = contracts.build().unwrap();
 
   val outputs = rpc.generate_all(
-    rt borrow graph,
+    &graph,
     "https://example.test/schema/rpc",
     "example.rpc",
     "Example.Rpc"
@@ -168,8 +168,7 @@ rejected mutation through readonly `messages_copy` in the library. The existing
 SOURCE_REF remains unchanged until ownership migration and golden-output
 validation succeed on a pinned compiler.
 
-### Exact compiler validation
+## Backend compatibility
 
-`ORESLANG_SOURCE_DIR` is required by `scripts/test.sh`; set it to a clean Git checkout at `SOURCE_REF`, and use `ORESLANG_COMPILER` built from that checkout. The runner rejects absent provenance and Git status failures before invoking the compiler. The checkout check alone cannot establish the identity of an arbitrary externally supplied binary; the build and test must use the same source tree.
-
-`bash scripts/test-runner.sh` exercises the shell runner using a test double and a temporary Git checkout. It does not execute Oreslang or certify compiler compatibility.
+See [the compiler compatibility contract](docs/BACKENDS.md) for pinned Java/LLVM
+revisions, reproducible checks, and unsupported features.

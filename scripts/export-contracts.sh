@@ -44,6 +44,12 @@ for entry in json_schema protobuf messagepack typespec; do
     echo "RPC guest emitted an empty $output_name" >&2
     exit 1
   fi
+  # This caps publishable output; guest runtime memory is a separate gate.
+  size_bytes="$(wc -c < "$stage/$output_name")"
+  if (( size_bytes > 1048576 )); then
+    echo "RPC guest artifact exceeds 1 MiB limit: $output_name" >&2
+    exit 1
+  fi
 done
 if [[ -e "$output" || -L "$output" ]]; then
   echo "RPC export destination appeared during generation: $output" >&2

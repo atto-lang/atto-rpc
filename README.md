@@ -229,15 +229,24 @@ python3 scripts/verify-contract-output.py \
   --typespec /tmp/rpc-contract-export-verified/contracts.tsp
 ```
 
-The independent validator checks JSON Schema 2020-12, MessagePack field
-numbers/grammar, and runs external `protoc`/`tsp` on **actual exported
-artifacts**. Missing validators cause a failure, never a skipped success.
-The eleven export harness tests use an explicit **fake compiler** to verify
+The independent validator checks JSON Schema 2020-12 and MessagePack
+syntax, **cross-checks JSON Schema/MessagePack model registries, property
+names, requiredness, field types and named references**, and runs external
+`protoc`/`tsp` on the actual exported files. It rejects symlinks, empty or
+over-1-MiB inputs, non-JSON NaN/Infinity tokens and malformed required
+properties; external validators have 90-second timeouts. Missing validators
+cause a failure, never a skipped success. It cannot compare numeric wire IDs
+against JSON Schema (which has no field-number representation).
+
+The eleven export harness tests use a **fake compiler** to verify
 byte-preservation, process timeout, stdout/stderr overflow, UTF-8 rejection,
-fixture parity, and failure/cleanup paths. The five validator self-tests
-cover its Python parsing/rejection logic. **Neither set is native guest
-execution evidence.** An actual pinned compiler run, complete artifact
-validation, and a reviewed release budget are still required.
+fixture parity and cleanup. The twelve validator unit tests cover parsing,
+schema parity, malformed input and fail-closed behavior. These source-level
+tests and their local model-level checks are **not native Oreslang guest
+execution evidence**. The native fixture now has 102 expected output lines,
+including six reserved MessagePack primitive-name rejections. Actual pinned
+compiler execution, full artifact validation and security review are still
+required.
 
 The live output/time budget limits captured output and wall-clock time for
 each invoked subprocess, but it is **not** a guest heap-memory limit, an

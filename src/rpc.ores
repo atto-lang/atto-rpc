@@ -18,7 +18,8 @@ define module rpc as
       "extensions", "group", "to", "max", "true", "false",
       "namespace", "model", "interface", "op", "using", "is",
       "alias", "string", "bool", "bytes", "int32", "int64",
-      "float", "double", "unknown"
+      "float", "double", "unknown",
+      "str", "int", "bin", "any", "timestamp", "array"
     ]) {
       if name == reserved; then return false; fi
     }

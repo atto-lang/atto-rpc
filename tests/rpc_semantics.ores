@@ -437,5 +437,28 @@ pub routine main(): void {
   ).unwrap();
   stdio.println(ambiguous_projection.build().is_err());
 
+  // Budget validation is independent of identifier uniqueness: 64 unique
+  // messages are admitted, while the 65th must fail without mutation.
+  let cap_builder = rpc.builder();
+  let String cap_name = "M";
+  for (let int cap_index = 0; cap_index < 64; cap_index = cap_index + 1) {
+    cap_builder.add_message(rpc.message(cap_name, arr[])).unwrap();
+    cap_name = cap_name + "x";
+  }
+  stdio.println(cap_builder.message_count());
+  stdio.println(cap_builder.add_message(rpc.message(cap_name, arr[])).is_err());
+  stdio.println(cap_builder.message_count());
+
+  // Invalid TypeSpec string literal routes must fail at contract build even
+  // if the same malformed HTTP path was accepted at initial registration.
+  let route_injection_builder = rpc.builder();
+  route_injection_builder.add_message(rpc.message("Req", arr[])).unwrap();
+  route_injection_builder.add_message(rpc.message("Res", arr[])).unwrap();
+  route_injection_builder.add_rpc_as_http(
+    rpc.rpc_method(810, "Tests", "RouteInjection", "tests.route_injection", "Req", "Res"),
+    "GET", "/injected\\\"token", 810, 1
+  ).unwrap();
+  stdio.println(route_injection_builder.build().is_err());
+
   return;
 }

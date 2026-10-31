@@ -21,7 +21,7 @@ define module rpc as
       if self.kind < 0 || self.kind > 9; then
         return false;
       fi
-      if self.kind == 7 && self.name == ""; then
+      if self.kind == 7 && !self.name.is_identifier(); then
         return false;
       fi
       return true;
@@ -49,7 +49,7 @@ define module rpc as
     }
 
     pub is_valid(): bool {
-      if self.name == ""; then
+      if !self.name.is_identifier(); then
         return false;
       fi
       if self.number <= 0 || self.number > 536870911 || self.number_text == ""; then
@@ -85,7 +85,7 @@ define module rpc as
     }
 
     pub is_valid(): bool {
-      if self.name == ""; then
+      if !self.name.is_identifier(); then
         return false;
       fi
 
@@ -122,10 +122,10 @@ define module rpc as
       if self.contract_id < 0; then
         return false;
       fi
-      if self.service == "" || self.name == "" || self.operation_id == ""; then
+      if !self.service.is_identifier() || !self.name.is_identifier() || self.operation_id == ""; then
         return false;
       fi
-      if self.request_type == "" || self.response_type == ""; then
+      if !self.request_type.is_identifier() || !self.response_type.is_identifier(); then
         return false;
       fi
       return self.streaming_kind >= 0 && self.streaming_kind <= 3;
@@ -163,10 +163,10 @@ define module rpc as
       if self.handler_id < 0 || self.contract_id < 0; then
         return false;
       fi
-      if self.operation_id == "" || self.rpc_service == "" || self.rpc_name == ""; then
+      if self.operation_id == "" || !self.rpc_service.is_identifier() || !self.rpc_name.is_identifier(); then
         return false;
       fi
-      if self.request_type == "" || self.response_type == ""; then
+      if !self.request_type.is_identifier() || !self.response_type.is_identifier(); then
         return false;
       fi
       return self.streaming_kind >= 0 && self.streaming_kind <= 3;
@@ -190,7 +190,9 @@ define module rpc as
       if self.contract_id < 0; then
         return false;
       fi
-      if self.field_name == "" || self.wire_name == ""; then
+      // These values become TypeSpec names/decorator arguments. Never
+      // interpolate arbitrary contract text into generated source syntax.
+      if !self.field_name.is_identifier() || !self.wire_name.is_route_segment(); then
         return false;
       fi
       return self.location >= 0 && self.location <= 3;

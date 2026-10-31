@@ -1620,12 +1620,35 @@ define module rpc as
     if !safe_qualified_name(typespec_namespace); then
       return Err("unsafe TypeSpec namespace");
     fi
-    for (let int index = 0; index < contracts.http_handler_count(); index = index + 1) {
-      if !safe_http_path(contracts.http_handler_at(index).path_template); then
-        return Err("unsafe HTTP path template");
+    // Reconstruct via the admission builder so a caller cannot bypass
+    // validation by manually creating a ContractSet with malformed members.
+    let ContractBuilder checked = builder();
+    for (let int index = 0; index < contracts.message_count(); index = index + 1) {
+      if checked.add_message(contracts.message_at(index)).is_err(); then
+        return Err("unsafe RPC message");
       fi
     }
-    return Ok(generate_all(contracts, json_schema_id, proto_package, typespec_namespace));
+    for (let int index = 0; index < contracts.method_count(); index = index + 1) {
+      if checked.add_rpc(contracts.method_at(index)).is_err(); then
+        return Err("unsafe RPC method");
+      fi
+    }
+    for (let int index = 0; index < contracts.http_handler_count(); index = index + 1) {
+      if checked.add_http(contracts.http_handler_at(index)).is_err(); then
+        return Err("unsafe HTTP handler");
+      fi
+    }
+    for (let int index = 0; index < contracts.http_field_binding_count(); index = index + 1) {
+      if checked.add_http_field_binding(contracts.http_field_binding_at(index)).is_err(); then
+        return Err("unsafe HTTP field binding");
+      fi
+    }
+    val validated = checked.build();
+    if validated.is_err(); then
+      return Err("unsafe RPC contract graph");
+    fi
+    val ContractSet safe_contracts = validated.unwrap();
+    return Ok(generate_all(rt borrow safe_contracts, json_schema_id, proto_package, typespec_namespace));
   }
 
   pub fnc generate_all(

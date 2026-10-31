@@ -47,6 +47,7 @@ case "${2##*/}" in
   rpc_semantics.ores) printf 'test-output\\n' ;;
   export_*.ores)
     if [[ "${FAIL_EXPORT:-}" == "${2##*/}" ]]; then exit 41; fi
+    if [[ "${FLOOD_EXPORT:-}" == "${2##*/}" ]]; then head -c 1048577 /dev/zero; exit 0; fi
     printf 'fragment\\n\\nexact<%s>' "${2##*/}" ;;
   *) exit 90 ;;
 esac
@@ -73,6 +74,14 @@ esac
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(self.dest.exists())
                 self.assertFalse(list(self.work.glob('.rpc-export.*')))
+
+    def test_oversized_artifact_rejected_without_partial_publish(self):
+        env = dict(self.env, FLOOD_EXPORT='export_typespec.ores')
+        result = self.run_export(env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('1 MiB limit', result.stderr)
+        self.assertFalse(self.dest.exists())
+        self.assertFalse(list(self.work.glob('.rpc-export.*')))
 
     def test_existing_destination_rejected_without_changes(self):
         self.dest.mkdir()

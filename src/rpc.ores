@@ -111,6 +111,12 @@ define module rpc as
       if self.number <= 0 || self.number > 536870911 || self.number_text == ""; then
         return false;
       fi
+      // Proto3 repeated fields cannot carry an independent required/presence
+      // qualifier. Reject a cross-IDL contract that cannot round-trip its
+      // stated requiredness through the protobuf wire.
+      if self.required && self.repeated; then
+        return false;
+      fi
       // Protocol Buffers reserves 19000..19999 for its own implementation.
       if self.number >= 19000 && self.number <= 19999; then
         return false;

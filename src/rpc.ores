@@ -388,6 +388,39 @@ define module rpc as
     return true;
   }
 
+  // HTTP header names are case-insensitive; Oreslang's pinned string API
+  // has literal replacement but no locale-independent ASCII lower primitive.
+  fnc header_ascii_key(String wire_name): String {
+    let String canonical = wire_name;
+    canonical = canonical.replace_literal("A", "a");
+    canonical = canonical.replace_literal("B", "b");
+    canonical = canonical.replace_literal("C", "c");
+    canonical = canonical.replace_literal("D", "d");
+    canonical = canonical.replace_literal("E", "e");
+    canonical = canonical.replace_literal("F", "f");
+    canonical = canonical.replace_literal("G", "g");
+    canonical = canonical.replace_literal("H", "h");
+    canonical = canonical.replace_literal("I", "i");
+    canonical = canonical.replace_literal("J", "j");
+    canonical = canonical.replace_literal("K", "k");
+    canonical = canonical.replace_literal("L", "l");
+    canonical = canonical.replace_literal("M", "m");
+    canonical = canonical.replace_literal("N", "n");
+    canonical = canonical.replace_literal("O", "o");
+    canonical = canonical.replace_literal("P", "p");
+    canonical = canonical.replace_literal("Q", "q");
+    canonical = canonical.replace_literal("R", "r");
+    canonical = canonical.replace_literal("S", "s");
+    canonical = canonical.replace_literal("T", "t");
+    canonical = canonical.replace_literal("U", "u");
+    canonical = canonical.replace_literal("V", "v");
+    canonical = canonical.replace_literal("W", "w");
+    canonical = canonical.replace_literal("X", "x");
+    canonical = canonical.replace_literal("Y", "y");
+    canonical = canonical.replace_literal("Z", "z");
+    return canonical;
+  }
+
   pub define class ContractBuilder as
     val Array<MessageDef> messages_value = arr[];
     val Array<RpcMethodDef> methods_value = arr[];
@@ -427,6 +460,11 @@ define module rpc as
            existing.location == binding_value.location &&
            existing.wire_name == binding_value.wire_name; then
           return Err("duplicate HTTP wire parameter");
+        fi
+        if existing.contract_id == binding_value.contract_id &&
+           existing.location == 2 && binding_value.location == 2 &&
+           header_ascii_key(existing.wire_name) == header_ascii_key(binding_value.wire_name); then
+          return Err("duplicate HTTP header wire parameter");
         fi
       }
 

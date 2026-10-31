@@ -67,6 +67,11 @@ The builder fails closed on duplicate message names, duplicate wire field names/
 
 Field numbers are shared by protobuf and MessagePack so one compatibility policy governs both representations.
 
+HTTP field bindings also reject two request fields claiming the same external
+wire parameter within one contract and location. Equivalent names in distinct
+locations or distinct contracts remain separate; header-name case folding and
+full transport parser compatibility still need independent verification.
+
 ## Example
 
 ```ores
@@ -106,7 +111,7 @@ pub routine main(): void {
   val graph = contracts.build().unwrap();
 
   val outputs = rpc.generate_all(
-    &graph,
+    rt borrow graph,
     "https://example.test/schema/rpc",
     "example.rpc",
     "Example.Rpc"

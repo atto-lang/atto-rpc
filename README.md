@@ -67,10 +67,18 @@ The builder fails closed on duplicate message names, duplicate wire field names/
 
 Field numbers are shared by protobuf and MessagePack so one compatibility policy governs both representations.
 
+Message, field, service, RPC method, and referenced message type names
+must satisfy the compiler's identifier predicate before they can become
+schema/IDL source. HTTP field binding names must satisfy the identifier
+predicate, while external wire names must satisfy the route-segment predicate.
+
 HTTP field bindings also reject two request fields claiming the same external
 wire parameter within one contract and location. Equivalent names in distinct
 locations or distinct contracts remain separate; header-name case folding and
 full transport parser compatibility still need independent verification.
+The low-level emitters still require trusted schema IDs, package names,
+namespace names, and route templates until dedicated escaping/admission
+contracts are implemented; do not feed untrusted strings to those arguments.
 
 ## Example
 

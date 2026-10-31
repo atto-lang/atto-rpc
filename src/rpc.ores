@@ -327,6 +327,14 @@ define module rpc as
            existing.field_name == binding_value.field_name; then
           return Err("duplicate HTTP field binding");
         fi
+        // Two request fields cannot claim the same external parameter within
+        // one contract/location. That makes decoded requests ambiguous and
+        // produces duplicate TypeSpec decorators for one wire name.
+        if existing.contract_id == binding_value.contract_id &&
+           existing.location == binding_value.location &&
+           existing.wire_name == binding_value.wire_name; then
+          return Err("duplicate HTTP wire parameter");
+        fi
       }
 
       self.http_field_bindings_value.add(binding_value);

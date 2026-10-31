@@ -480,5 +480,14 @@ pub routine main(): void {
   ).unwrap();
   stdio.println(repeat_path_builder.build().is_err());
 
+  // MessagePack primitives cannot be shadowed by named messages; a
+  // foreign schema must not change scalar `str`/`int`/`bin` wire meaning.
+  stdio.println(rpc.message("str", arr[]).is_valid());
+  stdio.println(rpc.message("int", arr[]).is_valid());
+  stdio.println(rpc.message("bin", arr[]).is_valid());
+  stdio.println(rpc.message("timestamp", arr[]).is_valid());
+  stdio.println(rpc.message("array", arr[]).is_valid());
+  stdio.println(rpc.message_type("any").is_valid());
+
   return;
 }

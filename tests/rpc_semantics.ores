@@ -465,5 +465,20 @@ pub routine main(): void {
     "invalid_presence", 1, "1", rpc.string_type(), true, true
   ).is_valid());
 
+  // Repeated {id} route placeholders are ambiguous even with one binding.
+  let repeat_path_builder = rpc.builder();
+  repeat_path_builder.add_message(rpc.message("Req", arr[
+    rpc.field("id", 1, "1", rpc.string_type(), true, false)
+  ])).unwrap();
+  repeat_path_builder.add_message(rpc.message("Res", arr[])).unwrap();
+  repeat_path_builder.add_rpc_as_http(
+    rpc.rpc_method(820, "Tests", "RepeatPath", "tests.repeat_path", "Req", "Res"),
+    "GET", "/items/{id}/{id}", 820, 1
+  ).unwrap();
+  repeat_path_builder.add_http_field_binding(
+    rpc.http_path_field(820, "id", "id")
+  ).unwrap();
+  stdio.println(repeat_path_builder.build().is_err());
+
   return;
 }

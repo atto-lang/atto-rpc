@@ -321,5 +321,19 @@ pub routine main(): void {
   ).unwrap();
   stdio.println(alias_builder.http_field_binding_count());
 
+  // Contract names are emitted into several IDLs. Reject malformed names
+  // before generation rather than allowing syntax injection or bad $refs.
+  stdio.println(rpc.message_type("Bad-Name").is_valid());
+  stdio.println(rpc.field(
+    "bad-name", 1, "1", rpc.string_type(), true, false
+  ).is_valid());
+  stdio.println(rpc.message("Bad-Message", arr[]).is_valid());
+  stdio.println(rpc.rpc_method(
+    55, "Bad-Service", "Call", "test.call", "Req", "Res"
+  ).is_valid());
+  stdio.println(rpc.http_field_binding(
+    55, "valid_field", "broken\"name", rpc.http_query_location()
+  ).is_valid());
+
   return;
 }

@@ -191,34 +191,50 @@ See `docs/MESSAGEPACK.md` for compatibility rules.
 
 The repository pins the compiler revision in `SOURCE_REF`.
 
-## Independent generated-artifact validation
+## Native full-document export and independent validation
 
-The new `scripts/verify-contract-output.py` checks **actual guest-emitted**
-artifacts; it does not generate contracts. Supply four complete files created
-from `TextDocument` by concatenating fragments **without** adding separators
-or newlines between fragments:
+The four `tests/export_*.ores` entry points each generate the same validated
+contract graph and stream exactly one output format to `stdio.stdout.write`.
+They never use `println` or insert a separator between `TextDocument`
+fragments. `scripts/export-contracts.sh` requires a passing `scripts/test.sh`
+preflight against an **exact, clean `SOURCE_REF` compiler checkout**. It checks
+each source before executing, captures each complete guest stream, rejects
+empty or over-1-MiB artifacts, and publishes a **new** directory only if all
+four exports complete. No partial destination is published on failure.
 
 ```bash
+# Use a clean Java compiler checkout at the pinned SOURCE_REF.
+# Build with JDK 25 and Maven as described in scripts/compiler.sh:
+#   mvn -q -DskipTests package dependency:build-classpath -Dmdep.outputFile=target/classpath.txt
+export ORESLANG_SOURCE_DIR=/absolute/path/to/oreslang-source.java
+export ORESLANG_COMPILER="$PWD/scripts/compiler.sh"
 python3 -m pip install 'jsonschema==4.26.0'
-python3 -m unittest discover -s tests -p test_verify_contract_output.py -v
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 
-# Requires installed protoc and @typespec/compiler CLI (tsp), with
-# @typespec/http available in the TypeSpec project's dependencies.
+# Destination must NOT yet exist; parent directory must exist.
+bash scripts/export-contracts.sh /tmp/rpc-contract-export-verified
+
+# Requires real protoc and @typespec/compiler CLI (tsp) with
+# @typespec/http installed in the TypeSpec project.
 python3 scripts/verify-contract-output.py \
-  --json-schema /path/to/contracts.schema.json \
-  --protobuf /path/to/contracts.proto \
-  --messagepack /path/to/contracts.mpackdef \
-  --typespec /path/to/contracts.tsp
+  --json-schema /tmp/rpc-contract-export-verified/contracts.schema.json \
+  --protobuf /tmp/rpc-contract-export-verified/contracts.proto \
+  --messagepack /tmp/rpc-contract-export-verified/contracts.mpackdef \
+  --typespec /tmp/rpc-contract-export-verified/contracts.tsp
 ```
 
-The script rejects duplicate JSON keys, invalid JSON Schema 2020-12
-declarations, invalid required properties, malformed MessagePack definitions,
-noncanonical field numbers, duplicate field names/numbers and contradictory
-`required + repeated` definitions. It runs `protoc` and `tsp` on the actual
-artifacts. Missing validators cause a **nonzero failure**, never a silently
-skipped check. Its five local self-tests are separate from the pinned native
-compiler, which must run `scripts/test.sh` at the exact `SOURCE_REF` before
-any executable RPC claim can advance.
+The independent validator checks JSON Schema 2020-12, MessagePack field
+numbers/grammar, and runs external `protoc`/`tsp` on **actual exported
+artifacts**. Missing validators cause a failure, never a skipped success.
+The six export harness tests use an explicit **fake compiler** to verify
+byte-preservation and rejection/cleanup paths. The five validator self-tests
+cover its Python parsing/rejection logic. **Neither set is native guest
+execution evidence.** An actual pinned compiler run, complete artifact
+validation, and a reviewed release budget are still required.
+
+The 1-MiB-per-file export guard applies *after* execution; it is not a
+runtime memory, input-byte, recursion-depth, or compute-time bound and cannot
+authorize untrusted RPC contract ingestion.
 
 ## Compiler compatibility checkpoint (2026-10-06)
 

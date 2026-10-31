@@ -339,6 +339,55 @@ define module rpc as
     }
   end
 
+  // Restrict raw TypeSpec @route string interpolation to a small ASCII
+  // canonical path grammar: slash-separated literal or {identifier} segments.
+  // Reject queries, fragments, controls, quotes, mixed templates, and escapes.
+  fnc safe_http_path(String path): bool {
+    if path == "/"; then return true; fi
+    if !path.starts_with("/"); then return false; fi
+    val segments = path.split_literal("/");
+    if segments.size < 2 || segments.get(0) != ""; then return false; fi
+    for (let int idx = 1; idx < segments.size; idx = idx + 1) {
+      val String segment = segments.get(idx);
+      if segment == ""; then return false; fi
+      if segment.starts_with("{") || segment.ends_with("}"); then
+        val String name = segment.replace_literal("{", "").replace_literal("}", "");
+        if !name.is_identifier() || segment != "{" + name + "}"; then
+          return false;
+        fi
+      elseif !segment.is_route_segment() || segment.starts_with("["); then
+        return false;
+      fi
+    }
+    return true;
+  }
+
+  // A quoted schema ID is not a general URL parser: the safe generator only
+  // admits HTTPS host labels and ASCII path segments without query/fragment.
+  fnc safe_schema_id(String value): bool {
+    val segments = value.split_literal("/");
+    if segments.size < 3 || segments.get(0) != "https:" || segments.get(1) != ""; then
+      return false;
+    fi
+    val host = segments.get(2).split_literal(".");
+    if host.size < 2; then return false; fi
+    for (const label of host) {
+      if !label.is_identifier(); then return false; fi
+    }
+    for (let int idx = 3; idx < segments.size; idx = idx + 1) {
+      if !segments.get(idx).is_route_segment(); then return false; fi
+    }
+    return true;
+  }
+
+  fnc safe_qualified_name(String value): bool {
+    val segments = value.split_literal(".");
+    for (const segment of segments) {
+      if !segment.is_identifier(); then return false; fi
+    }
+    return true;
+  }
+
   pub define class ContractBuilder as
     val Array<MessageDef> messages_value = arr[];
     val Array<RpcMethodDef> methods_value = arr[];
@@ -546,8 +595,12 @@ define module rpc as
         fi
       }
 
-      // Cross-reference HTTP bindings with RPC identity.
+      // Cross-reference HTTP bindings with RPC identity and reject any path
+      // that could inject TypeSpec source through an @route string literal.
       for (const handler_value of self.http_handlers_value) {
+        if !safe_http_path(handler_value.path_template); then
+          return Err("invalid HTTP path template");
+        fi
         let bool found = false;
         for (const method_value of self.methods_value) {
           if method_value.contract_id == handler_value.contract_id &&
@@ -602,6 +655,37 @@ define module rpc as
         if !request_field_found; then
           return Err("HTTP field binding references an unknown request field");
         fi
+        if binding_value.location == 0; then
+          let bool placeholder_found = false;
+          for (const handler_value of self.http_handlers_value) {
+            if handler_value.contract_id == binding_value.contract_id &&
+               handler_value.path_template.contains_literal("{" + binding_value.wire_name + "}"); then
+              placeholder_found = true;
+            fi
+          }
+          if !placeholder_found; then
+            return Err("HTTP path binding has no matching placeholder");
+          fi
+        fi
+      }
+
+      // Every path placeholder must be backed by an explicit path binding.
+      for (const handler_value of self.http_handlers_value) {
+        for (const segment of handler_value.path_template.split_literal("/")) {
+          if segment.starts_with("{"); then
+            let bool matched = false;
+            for (const binding_value of self.http_field_bindings_value) {
+              if binding_value.contract_id == handler_value.contract_id &&
+                 binding_value.location == 0 &&
+                 segment == "{" + binding_value.wire_name + "}"; then
+                matched = true;
+              fi
+            }
+            if !matched; then
+              return Err("HTTP path placeholder has no matching field binding");
+            fi
+          fi
+        }
       }
 
       val Array<MessageDef> messages_copy = arr[];
@@ -1459,6 +1543,32 @@ define module rpc as
     }
 
     return out;
+  }
+
+  // Checked generator for untrusted callers. The legacy lower-level
+  // emitters remain available for trusted, already-validated contract graphs.
+  // This API rejects unsafe top-level schema IDs/names before interpolation.
+  pub fnc generate_all_checked(
+    borrow ContractSet contracts,
+    String json_schema_id,
+    String proto_package,
+    String typespec_namespace
+  ): Result<GeneratedBundle, String> {
+    if !safe_schema_id(json_schema_id); then
+      return Err("unsafe JSON Schema ID");
+    fi
+    if !safe_qualified_name(proto_package); then
+      return Err("unsafe protobuf package");
+    fi
+    if !safe_qualified_name(typespec_namespace); then
+      return Err("unsafe TypeSpec namespace");
+    fi
+    for (let int index = 0; index < contracts.http_handler_count(); index = index + 1) {
+      if !safe_http_path(contracts.http_handler_at(index).path_template); then
+        return Err("unsafe HTTP path template");
+      fi
+    }
+    return Ok(generate_all(contracts, json_schema_id, proto_package, typespec_namespace));
   }
 
   pub fnc generate_all(

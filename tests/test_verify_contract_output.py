@@ -66,6 +66,16 @@ class ContractOutputVerification(unittest.TestCase):
             verification.validate_msgpack_def(self.mpack('mpackdef 1\nencoding map-int-keys\nmessage Request {\n'))
 
 
+    def test_json_nonfinite_tokens_and_nonstring_required_fail_closed(self):
+        bad = self.file('{"$schema":"https://json-schema.org/draft/2020-12/schema",'
+                        '"$id":"https://example.test/rpc","$defs":{},"unknown":NaN}', 'nan.json')
+        with self.assertRaisesRegex(verification.ContractError, "nonstandard JSON"):
+            verification.validate_json_schema(bad)
+        doc = json.loads(self.schema().read_text())
+        doc["$defs"]["Request"]["required"] = [[]]
+        with self.assertRaisesRegex(verification.ContractError, "invalid required"):
+            verification.validate_json_schema(self.schema(doc))
+
     def test_cross_idl_positive_and_type_drift(self):
         schema = verification.validate_json_schema(self.schema())
         self.assertTrue(verification.validate_cross_idl(schema, self.mpack()))

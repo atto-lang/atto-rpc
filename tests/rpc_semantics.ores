@@ -405,5 +405,37 @@ pub routine main(): void {
   ).unwrap();
   stdio.println(extra_path_builder.build().is_err());
 
+  // Generated TypeSpec models and interfaces share one namespace.
+  let service_name_collision = rpc.builder();
+  service_name_collision.add_message(rpc.message("Req", arr[])).unwrap();
+  service_name_collision.add_message(rpc.message("Res", arr[])).unwrap();
+  service_name_collision.add_rpc(
+    rpc.rpc_method(800, "Req", "Call", "test.service_collision", "Req", "Res")
+  ).unwrap();
+  stdio.println(service_name_collision.build().is_err());
+
+  let projection_name_collision = rpc.builder();
+  projection_name_collision.add_message(rpc.message("Req", arr[])).unwrap();
+  projection_name_collision.add_message(rpc.message("Res", arr[])).unwrap();
+  projection_name_collision.add_message(rpc.message("A_B_HttpRequest", arr[])).unwrap();
+  projection_name_collision.add_rpc_as_http(
+    rpc.rpc_method(801, "A", "B", "test.projection_collision", "Req", "Res"),
+    "GET", "/ping", 801, 1
+  ).unwrap();
+  stdio.println(projection_name_collision.build().is_err());
+
+  let ambiguous_projection = rpc.builder();
+  ambiguous_projection.add_message(rpc.message("Req", arr[])).unwrap();
+  ambiguous_projection.add_message(rpc.message("Res", arr[])).unwrap();
+  ambiguous_projection.add_rpc_as_http(
+    rpc.rpc_method(802, "A_B", "C", "test.c", "Req", "Res"),
+    "GET", "/c", 802, 1
+  ).unwrap();
+  ambiguous_projection.add_rpc_as_http(
+    rpc.rpc_method(803, "A", "B_C", "test.b_c", "Req", "Res"),
+    "GET", "/b-c", 803, 1
+  ).unwrap();
+  stdio.println(ambiguous_projection.build().is_err());
+
   return;
 }

@@ -140,6 +140,9 @@ pub routine main(): void {
     1001,
     7
   ).unwrap();
+  contracts.add_http_field_binding(
+    rpc.http_path_field(42, "id", "id")
+  ).unwrap();
 
   val graph = contracts.build().unwrap();
 
@@ -187,6 +190,35 @@ See `docs/MESSAGEPACK.md` for compatibility rules.
 - TypeSpec generation
 
 The repository pins the compiler revision in `SOURCE_REF`.
+
+## Independent generated-artifact validation
+
+The new `scripts/verify-contract-output.py` checks **actual guest-emitted**
+artifacts; it does not generate contracts. Supply four complete files created
+from `TextDocument` by concatenating fragments **without** adding separators
+or newlines between fragments:
+
+```bash
+python3 -m pip install 'jsonschema==4.26.0'
+python3 -m unittest discover -s tests -p test_verify_contract_output.py -v
+
+# Requires installed protoc and @typespec/compiler CLI (tsp), with
+# @typespec/http available in the TypeSpec project's dependencies.
+python3 scripts/verify-contract-output.py \
+  --json-schema /path/to/contracts.schema.json \
+  --protobuf /path/to/contracts.proto \
+  --messagepack /path/to/contracts.mpackdef \
+  --typespec /path/to/contracts.tsp
+```
+
+The script rejects duplicate JSON keys, invalid JSON Schema 2020-12
+declarations, invalid required properties, malformed MessagePack definitions,
+noncanonical field numbers, duplicate field names/numbers and contradictory
+`required + repeated` definitions. It runs `protoc` and `tsp` on the actual
+artifacts. Missing validators cause a **nonzero failure**, never a silently
+skipped check. Its five local self-tests are separate from the pinned native
+compiler, which must run `scripts/test.sh` at the exact `SOURCE_REF` before
+any executable RPC claim can advance.
 
 ## Compiler compatibility checkpoint (2026-10-06)
 

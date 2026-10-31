@@ -39,18 +39,18 @@ for entry in json_schema protobuf messagepack typespec; do
     messagepack) output_name=contracts.mpackdef ;;
     typespec) output_name=contracts.tsp ;;
   esac
-  "$compiler" --check --platform=server "$repo_root/$source"
-  "$compiler" --platform=server "$repo_root/$source" > "$stage/$output_name"
-  if [[ ! -s "$stage/$output_name" ]]; then
-    echo "RPC guest emitted an empty $output_name" >&2
-    exit 1
-  fi
-  # This caps publishable output; guest runtime memory is a separate gate.
-  size_bytes="$(wc -c < "$stage/$output_name")"
-  if (( size_bytes > 1048576 )); then
-    echo "RPC guest artifact exceeds 1 MiB limit: $output_name" >&2
-    exit 1
-  fi
+  # Enforce the resource limits *while* the guest process runs. The helper
+  # terminates a hanging or flooding child before committing any output file.
+  guest_timeout="${ORESLANG_RPC_EXPORT_TIMEOUT_SECONDS:-120}"
+  python3 "$repo_root/scripts/emit-guest-document.py" \
+    --output "$stage/.check_$entry" --timeout-seconds "$guest_timeout" \
+    --max-total-bytes 65536 --allow-empty -- \
+    "$compiler" --check --platform=server "$repo_root/$source"
+  rm -f -- "$stage/.check_$entry"
+  python3 "$repo_root/scripts/emit-guest-document.py" \
+    --output "$stage/$output_name" --timeout-seconds "$guest_timeout" \
+    --max-total-bytes 1048576 -- \
+    "$compiler" --platform=server "$repo_root/$source"
 done
 if [[ -e "$output" || -L "$output" ]]; then
   echo "RPC export destination appeared during generation: $output" >&2

@@ -23,8 +23,9 @@ fi
 parent="$(cd "$parent" && pwd -P)"
 output="$parent/$leaf"
 compiler="${ORESLANG_COMPILER:-oreslang-compiler}"
-# test.sh proves source SHA, clean compiler checkout, check-before-run,
-# and exact native semantics golden output. It does not use a mock compiler.
+# test.sh verifies the declared source SHA, clean checkout, check-before-run,
+# and guest transcript. The compiler binary must be independently attested
+# to have been built from that exact checkout; these guards alone cannot prove it.
 bash "$repo_root/scripts/test.sh" >/dev/null
 stage="$(mktemp -d "$parent/.rpc-export.XXXXXXXX")"
 cleanup() { if [[ -n "${stage:-}" && -d "$stage" ]]; then rm -rf -- "$stage"; fi; }

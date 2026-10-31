@@ -67,6 +67,16 @@ The builder fails closed on duplicate message names, duplicate wire field names/
 
 Field numbers are shared by protobuf and MessagePack so one compatibility policy governs both representations.
 
+The checked builder has deliberately conservative per-graph limits:
+**64 messages**, **128 fields per message**, **256 RPC methods**,
+**256 HTTP handlers**, and **512 HTTP field bindings**. It also rejects
+duplicate HTTP path placeholders, contradictory `required + repeated`
+fields, and ambiguous generated names. These are **cardinality limits**,
+not yet byte-length/depth/output-size limits. The pinned Java runtime
+does not provide a verified `String.length` member, so byte budgets and
+recursion-depth admission remain release blockers for arbitrary untrusted
+contracts.
+
 Field-number text must now be the **canonical decimal representation** of its
 integer value, with no leading zeros, signs, whitespace, or substitutions.
 Validation uses bounded integral arithmetic and rejects mismatches before code

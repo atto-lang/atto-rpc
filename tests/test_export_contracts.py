@@ -19,7 +19,7 @@ class ExportContracts(unittest.TestCase):
         self.project = self.work / 'project with spaces'
         for name in ('scripts', 'tests'):
             (self.project / name).mkdir(parents=True)
-        for script in ('test.sh', 'export-contracts.sh'):
+        for script in ('test.sh', 'export-contracts.sh', 'emit-guest-document.py', 'bounded_process.py'):
             shutil.copyfile(ROOT / 'scripts' / script, self.project / 'scripts' / script)
         (self.project / 'tests' / 'expected.txt').write_bytes(b'test-output\n')
         (self.project / 'tests' / 'rpc_semantics.ores').write_text('native fixture\n')
@@ -48,6 +48,9 @@ case "${2##*/}" in
   export_*.ores)
     if [[ "${FAIL_EXPORT:-}" == "${2##*/}" ]]; then exit 41; fi
     if [[ "${FLOOD_EXPORT:-}" == "${2##*/}" ]]; then head -c 1048577 /dev/zero; exit 0; fi
+    if [[ "${FLOOD_STDERR:-}" == "${2##*/}" ]]; then head -c 1048577 /dev/zero >&2; exit 0; fi
+    if [[ "${SLOW_EXPORT:-}" == "${2##*/}" ]]; then sleep 3; fi
+    if [[ "${INVALID_UTF8:-}" == "${2##*/}" ]]; then printf '\\377'; exit 0; fi
     printf 'fragment\\n\\nexact<%s>' "${2##*/}" ;;
   *) exit 90 ;;
 esac
@@ -79,9 +82,43 @@ esac
         env = dict(self.env, FLOOD_EXPORT='export_typespec.ores')
         result = self.run_export(env=env)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('1 MiB limit', result.stderr)
+        self.assertIn('compiler output budget exceeded', result.stderr)
         self.assertFalse(self.dest.exists())
         self.assertFalse(list(self.work.glob('.rpc-export.*')))
+
+    def test_stderr_flood_cannot_bypass_combined_budget(self):
+        env = dict(self.env, FLOOD_STDERR='export_typespec.ores')
+        result = self.run_export(env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('compiler output budget exceeded', result.stderr)
+        self.assertFalse(self.dest.exists())
+
+    def test_hanging_export_times_out_without_publication(self):
+        env = dict(self.env, SLOW_EXPORT='export_typespec.ores',
+                   ORESLANG_RPC_EXPORT_TIMEOUT_SECONDS='0.1')
+        result = self.run_export(env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('timed out', result.stderr)
+        self.assertFalse(self.dest.exists())
+        self.assertFalse(list(self.work.glob('.rpc-export.*')))
+
+    def test_invalid_utf8_rejected_before_publication(self):
+        env = dict(self.env, INVALID_UTF8='export_typespec.ores')
+        result = self.run_export(env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('utf-8', result.stderr)
+        self.assertFalse(self.dest.exists())
+
+    def test_four_export_entrypoints_share_identical_contract_graph(self):
+        expected = None
+        for entry in EXPORT_NAMES:
+            code = (ROOT / 'tests' / f'export_{entry}.ores').read_text()
+            self.assertIn(f'generated.{entry}', code)
+            code = code.replace(f'generated.{entry}', 'generated.FORMAT')
+            if expected is None:
+                expected = code
+            else:
+                self.assertEqual(expected, code)
 
     def test_existing_destination_rejected_without_changes(self):
         self.dest.mkdir()

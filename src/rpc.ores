@@ -10,7 +10,7 @@ define module rpc as
   // conservative admission policy avoids accidentally producing names valid
   // in one output format but keywords in another.
   fnc safe_idl_identifier(String name): bool {
-    if name.length == 0 || name.length > 128 || !name.is_identifier(); then return false; fi
+    if !name.is_identifier(); then return false; fi
     for (const reserved of arr[
       "syntax", "package", "import", "option", "message", "enum",
       "service", "rpc", "returns", "stream", "map", "repeated",
@@ -185,7 +185,7 @@ define module rpc as
         return false;
       fi
       if !safe_idl_identifier(self.service) || !safe_idl_identifier(self.name) ||
-         self.operation_id == "" || self.operation_id.length > 256; then
+         self.operation_id == ""; then
         return false;
       fi
       if !safe_idl_identifier(self.request_type) || !safe_idl_identifier(self.response_type); then
@@ -212,8 +212,7 @@ define module rpc as
     pub val int streaming_kind;
 
     pub is_valid(): bool {
-      if self.method == "" || self.path_template == "" ||
-         self.path_template.length > 2048; then
+      if self.method == "" || self.path_template == ""; then
         return false;
       fi
       if self.method != "GET" &&
@@ -227,7 +226,7 @@ define module rpc as
       if self.handler_id < 0 || self.contract_id < 0; then
         return false;
       fi
-      if self.operation_id == "" || self.operation_id.length > 256 ||
+      if self.operation_id == "" ||
          !safe_idl_identifier(self.rpc_service) || !safe_idl_identifier(self.rpc_name); then
         return false;
       fi
@@ -257,8 +256,7 @@ define module rpc as
       fi
       // These values become TypeSpec names/decorator arguments. Never
       // interpolate arbitrary contract text into generated source syntax.
-      if !safe_idl_identifier(self.field_name) || self.wire_name.length > 128 ||
-         !self.wire_name.is_route_segment() || self.wire_name.starts_with("["); then
+      if !safe_idl_identifier(self.field_name) || !self.wire_name.is_route_segment() || self.wire_name.starts_with("["); then
         return false;
       fi
       return self.location >= 0 && self.location <= 3;
@@ -367,7 +365,6 @@ define module rpc as
   // canonical path grammar: slash-separated literal or {identifier} segments.
   // Reject queries, fragments, controls, quotes, mixed templates, and escapes.
   fnc safe_http_path(String path): bool {
-    if path.length == 0 || path.length > 2048; then return false; fi
     if path == "/"; then return true; fi
     if !path.starts_with("/"); then return false; fi
     val segments = path.split_literal("/");
@@ -390,7 +387,6 @@ define module rpc as
   // A quoted schema ID is not a general URL parser: the safe generator only
   // admits HTTPS host labels and ASCII path segments without query/fragment.
   fnc safe_schema_id(String value): bool {
-    if value.length == 0 || value.length > 2048; then return false; fi
     val segments = value.split_literal("/");
     if segments.size < 3 || segments.get(0) != "https:" || segments.get(1) != ""; then
       return false;
@@ -407,7 +403,6 @@ define module rpc as
   }
 
   fnc safe_qualified_name(String value): bool {
-    if value.length == 0 || value.length > 256; then return false; fi
     val segments = value.split_literal(".");
     for (const segment of segments) {
       if !safe_idl_identifier(segment); then return false; fi

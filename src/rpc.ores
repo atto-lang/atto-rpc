@@ -383,6 +383,11 @@ define module rpc as
         if !name.is_identifier() || segment != "{" + name + "}"; then
           return false;
         fi
+        // Repeating a path placeholder makes request-field projection
+        // ambiguous even if the binding table contains only one entry.
+        for (let int earlier = 1; earlier < idx; earlier = earlier + 1) {
+          if segments.get(earlier) == segment; then return false; fi
+        }
       elseif !segment.is_route_segment() || segment.starts_with("["); then
         return false;
       fi

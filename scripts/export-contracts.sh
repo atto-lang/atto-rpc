@@ -26,10 +26,15 @@ compiler="${ORESLANG_COMPILER:-oreslang-compiler}"
 # test.sh verifies the declared source SHA, clean checkout, check-before-run,
 # and guest transcript. The compiler binary must be independently attested
 # to have been built from that exact checkout; these guards alone cannot prove it.
-bash "$repo_root/scripts/test.sh" >/dev/null
 stage="$(mktemp -d "$parent/.rpc-export.XXXXXXXX")"
 cleanup() { if [[ -n "${stage:-}" && -d "$stage" ]]; then rm -rf -- "$stage"; fi; }
 trap cleanup EXIT
+guest_timeout="${ORESLANG_RPC_EXPORT_TIMEOUT_SECONDS:-120}"
+python3 "$repo_root/scripts/emit-guest-document.py" \
+  --output "$stage/.preflight" --timeout-seconds "$guest_timeout" \
+  --max-total-bytes 1048576 --allow-empty -- \
+  bash "$repo_root/scripts/test.sh"
+rm -f -- "$stage/.preflight"
 cd "$repo_root"
 for entry in json_schema protobuf messagepack typespec; do
   source="tests/export_${entry}.ores"
@@ -41,7 +46,6 @@ for entry in json_schema protobuf messagepack typespec; do
   esac
   # Enforce the resource limits *while* the guest process runs. The helper
   # terminates a hanging or flooding child before committing any output file.
-  guest_timeout="${ORESLANG_RPC_EXPORT_TIMEOUT_SECONDS:-120}"
   python3 "$repo_root/scripts/emit-guest-document.py" \
     --output "$stage/.check_$entry" --timeout-seconds "$guest_timeout" \
     --max-total-bytes 65536 --allow-empty -- \

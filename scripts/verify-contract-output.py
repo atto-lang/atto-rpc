@@ -103,6 +103,91 @@ def validate_msgpack_def(path):
     return len(messages), len(rpcs)
 
 
+
+def validate_cross_idl(schema, msgpack_path):
+    """Ensure JSON Schema and MessagePack describe the same message graph.
+
+    IDs remain verified independently by validate_msgpack_def; JSON Schema has
+    no field-number concept. This checks names, types, requiredness and refs.
+    """
+    definitions = schema["$defs"]
+    messages = {}
+    methods = []
+    current = None
+    for line in Path(msgpack_path).read_text(encoding="utf-8").splitlines()[2:]:
+        if not line:
+            continue
+        if current is not None:
+            if line == "}":
+                current = None
+                continue
+            field = FIELD.fullmatch(line)
+            if field is None:
+                raise ContractError("unrecognized MessagePack field during parity validation")
+            _, name, type_name, mode = field.groups()
+            messages[current][name] = (type_name, mode)
+            continue
+        message = MESSAGE.fullmatch(line)
+        if message:
+            current = message.group(1)
+            if current in messages:
+                raise ContractError("duplicate MessagePack model during parity validation")
+            messages[current] = {}
+            continue
+        rpc = RPC.fullmatch(line)
+        if rpc:
+            methods.append((rpc.group(3), rpc.group(4)))
+            continue
+        raise ContractError("unrecognized MessagePack statement during parity validation")
+    if current is not None or set(messages) != set(definitions):
+        raise ContractError("JSON Schema / MessagePack message registry mismatch")
+
+    scalar = {
+        "str": {"type": "string"},
+        "bool": {"type": "boolean"},
+        "int": {"type": "integer"},
+        "float": {"type": "number"},
+        "bin": {"type": "string", "contentEncoding": "base64"},
+        "timestamp": {"type": "string", "format": "date-time"},
+        "any": {},
+    }
+    for name, fields in messages.items():
+        model = definitions[name]
+        properties = model["properties"]
+        if set(fields) != set(properties):
+            raise ContractError(f"JSON Schema / MessagePack fields mismatch: {name}")
+        expected_required = {field for field, (_, mode) in fields.items() if mode == "required"}
+        if set(model["required"]) != expected_required:
+            raise ContractError(f"JSON Schema / MessagePack requiredness mismatch: {name}")
+        for field_name, (type_name, _) in fields.items():
+            repeated = type_name.startswith("array<")
+            kind = type_name[6:-1] if repeated else type_name
+            if kind in scalar:
+                expected = scalar[kind]
+            elif kind in definitions:
+                expected = {"$ref": f"#/$defs/{kind}"}
+            else:
+                raise ContractError(f"unresolved MessagePack field type: {name}.{field_name}")
+            if repeated:
+                expected = {"type": "array", "items": expected}
+            if properties[field_name] != expected:
+                raise ContractError(f"JSON Schema / MessagePack type mismatch: {name}.{field_name}")
+    for request, response in methods:
+        if request not in messages or response not in messages:
+            raise ContractError("MessagePack RPC references unknown message")
+    return True
+
+
+def require_bounded_artifacts(paths, max_bytes=1048576):
+    """Check all four files before parsing or executing external validators."""
+    for path in paths:
+        if path.is_symlink() or not path.is_file():
+            raise ContractError(f"missing, non-regular or symlink artifact: {path}")
+        size = path.stat().st_size
+        if not 0 < size <= max_bytes:
+            raise ContractError(f"artifact size outside 1 MiB budget: {path}")
+
+
 def require_external(name):
     tool = shutil.which(name)
     if tool is None:
@@ -116,8 +201,8 @@ def validate_external(proto, typespec):
     tsp = require_external("tsp")
     import tempfile
     with tempfile.TemporaryDirectory(prefix="ores-rpc-protoc-") as tmp:
-        subprocess.run([protoc, f"--proto_path={Path(proto).parent.resolve()}", f"--descriptor_set_out={Path(tmp) / 'contract.pb'}", "--include_imports", Path(proto).name], check=True)
-    subprocess.run([tsp, "compile", str(Path(typespec).resolve()), "--no-emit"], check=True)
+        subprocess.run([protoc, f"--proto_path={Path(proto).parent.resolve()}", f"--descriptor_set_out={Path(tmp) / 'contract.pb'}", "--include_imports", Path(proto).name], check=True, timeout=90)
+    subprocess.run([tsp, "compile", str(Path(typespec).resolve()), "--no-emit"], check=True, timeout=90)
 
 
 def main(argv=None):
@@ -127,8 +212,10 @@ def main(argv=None):
     p.add_argument("--messagepack", type=Path, required=True)
     p.add_argument("--typespec", type=Path, required=True)
     args = p.parse_args(argv)
-    validate_json_schema(args.json_schema)
+    require_bounded_artifacts((args.json_schema, args.protobuf, args.messagepack, args.typespec))
+    schema = validate_json_schema(args.json_schema)
     validate_msgpack_def(args.messagepack)
+    validate_cross_idl(schema, args.messagepack)
     validate_external(args.protobuf, args.typespec)
     print("RPC external artifact verification: PASS")
     return 0
@@ -137,6 +224,6 @@ def main(argv=None):
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (ContractError, OSError, subprocess.CalledProcessError, ValueError) as exc:
+    except (ContractError, OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as exc:
         print(f"RPC external artifact verification: FAIL: {exc}", file=sys.stderr)
         sys.exit(1)

@@ -32,8 +32,15 @@ def no_duplicate_pairs(pairs):
     return result
 
 
+def reject_nonjson_constant(value):
+    # Python's permissive JSON reader accepts NaN/Infinity by default.
+    raise ContractError(f"nonstandard JSON numeric literal: {value}")
+
+
 def validate_json_schema(path):
-    obj = json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=no_duplicate_pairs)
+    obj = json.loads(Path(path).read_text(encoding="utf-8"),
+                     object_pairs_hook=no_duplicate_pairs,
+                     parse_constant=reject_nonjson_constant)
     if not isinstance(obj, dict) or obj.get("$schema") != "https://json-schema.org/draft/2020-12/schema":
         raise ContractError("JSON Schema 2020-12 declaration missing")
     if not isinstance(obj.get("$id"), str) or not obj["$id"].startswith("https://"):
@@ -48,7 +55,7 @@ def validate_json_schema(path):
         required = model.get("required")
         if model.get("type") != "object" or not isinstance(props, dict) or not isinstance(required, list):
             raise ContractError(f"invalid object contract: {name}")
-        if len(required) != len(set(required)) or any(x not in props for x in required):
+        if any(not isinstance(x, str) for x in required) or len(required) != len(set(required)) or any(x not in props for x in required):
             raise ContractError(f"invalid required properties: {name}")
     try:
         from jsonschema import Draft202012Validator

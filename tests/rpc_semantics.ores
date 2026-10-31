@@ -460,5 +460,10 @@ pub routine main(): void {
   ).unwrap();
   stdio.println(route_injection_builder.build().is_err());
 
+  // Proto3 cannot encode an independently required repeated field.
+  stdio.println(rpc.field(
+    "invalid_presence", 1, "1", rpc.string_type(), true, true
+  ).is_valid());
+
   return;
 }

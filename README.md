@@ -67,6 +67,18 @@ The builder fails closed on duplicate message names, duplicate wire field names/
 
 Field numbers are shared by protobuf and MessagePack so one compatibility policy governs both representations.
 
+Field-number text must now be the **canonical decimal representation** of its
+integer value, with no leading zeros, signs, whitespace, or substitutions.
+Validation uses bounded integral arithmetic and rejects mismatches before code
+generation; field IDs 19000–19999 remain reserved by protobuf.
+
+For untrusted inputs use `generate_all_checked(...)` and handle its
+`Result<GeneratedBundle, String>`. It conservatively admits HTTPS ASCII schema
+IDs, identifier-only dotted protobuf packages/TypeSpec namespaces, and simple
+slash-separated literal or `{field}` HTTP paths. Route placeholders must match
+explicit required path bindings in both directions. HTTP header collisions are
+checked case-insensitively. Malformed or reserved cross-IDL names reject.
+
 Message, field, service, RPC method, and referenced message type names
 must satisfy the compiler's identifier predicate before they can become
 schema/IDL source. HTTP field binding names must satisfy the identifier
@@ -76,9 +88,12 @@ HTTP field bindings also reject two request fields claiming the same external
 wire parameter within one contract and location. Equivalent names in distinct
 locations or distinct contracts remain separate; header-name case folding and
 full transport parser compatibility still need independent verification.
-The low-level emitters still require trusted schema IDs, package names,
-namespace names, and route templates until dedicated escaping/admission
-contracts are implemented; do not feed untrusted strings to those arguments.
+Low-level emitter functions (`json_schema`, `protobuf`, `typespec`,
+`messagepack_defs`, and legacy `generate_all`) remain **trusted-only APIs**;
+they do not perform all generator-entry checks. The checked entrypoint rejects
+unsafe top-level names, but no full compiler-executed verification has yet been
+completed. Keep untrusted schema publication disabled until full source and
+external parser checks are green.
 
 ## Example
 
@@ -118,12 +133,12 @@ pub routine main(): void {
 
   val graph = contracts.build().unwrap();
 
-  val outputs = rpc.generate_all(
+  val outputs = rpc.generate_all_checked(
     rt borrow graph,
     "https://example.test/schema/rpc",
-    "example.rpc",
-    "Example.Rpc"
-  );
+    "example.api",
+    "Example.Api"
+  ).unwrap();
 
   // TextDocument is a sequence of native Oreslang String fragments.
   // A CLI/file/socket adapter can stream them without a Java StringBuilder.

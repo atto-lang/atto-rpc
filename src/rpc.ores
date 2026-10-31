@@ -745,6 +745,36 @@ define module rpc as
         }
       }
 
+      // TypeSpec emits messages as models and services as interfaces in one
+      // namespace. Protect their names and generated HTTP request projection
+      // names from collisions that would otherwise change emitted meaning.
+      for (const method_value of self.methods_value) {
+        for (const message_value of self.messages_value) {
+          if method_value.service == message_value.name; then
+            return Err("RPC service collides with message model name");
+          fi
+        }
+      }
+      for (const handler_value of self.http_handlers_value) {
+        val String projection_name =
+          handler_value.rpc_service + "_" + handler_value.rpc_name + "_HttpRequest";
+        for (const message_value of self.messages_value) {
+          if message_value.name == projection_name; then
+            return Err("HTTP request projection collides with message model name");
+          fi
+        }
+        let int matching_projections = 0;
+        for (const other_handler of self.http_handlers_value) {
+          if projection_name ==
+             other_handler.rpc_service + "_" + other_handler.rpc_name + "_HttpRequest"; then
+            matching_projections = matching_projections + 1;
+          fi
+        }
+        if matching_projections > 1; then
+          return Err("duplicate generated HTTP request projection name");
+        fi
+      }
+
       val Array<MessageDef> messages_copy = arr[];
       val Array<RpcMethodDef> methods_copy = arr[];
       val Array<HttpHandlerDef> http_copy = arr[];

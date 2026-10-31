@@ -300,5 +300,26 @@ pub routine main(): void {
   )));
   stdio.println(missing_builder.build().is_err());
 
+  // Reject ambiguous external parameter names for the same HTTP contract
+  // and location, without rejecting separate locations or contracts.
+  let alias_builder = rpc.builder();
+  alias_builder.add_http_field_binding(
+    rpc.http_query_field(500, "first", "shared")
+  ).unwrap();
+  stdio.println(alias_builder.add_http_field_binding(
+    rpc.http_query_field(500, "second", "shared")
+  ).is_err());
+  stdio.println(alias_builder.http_field_binding_count());
+
+  alias_builder.add_http_field_binding(
+    rpc.http_header_field(500, "third", "shared")
+  ).unwrap();
+  stdio.println(alias_builder.http_field_binding_count());
+
+  alias_builder.add_http_field_binding(
+    rpc.http_query_field(501, "fourth", "shared")
+  ).unwrap();
+  stdio.println(alias_builder.http_field_binding_count());
+
   return;
 }

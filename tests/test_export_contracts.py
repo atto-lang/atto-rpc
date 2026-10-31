@@ -39,6 +39,7 @@ set -euo pipefail
 if [[ "$1" = --check ]]; then
   test "$2" = --platform=server
   test -f "$3"
+  if [[ "${SLOW_PREFLIGHT:-}" = 1 && "${3##*/}" = rpc_semantics.ores ]]; then sleep 3; fi
   exit 0
 fi
 test "$1" = --platform=server
@@ -92,6 +93,15 @@ esac
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('compiler output budget exceeded', result.stderr)
         self.assertFalse(self.dest.exists())
+
+    def test_hanging_pinned_compiler_preflight_times_out(self):
+        env = dict(self.env, SLOW_PREFLIGHT='1',
+                   ORESLANG_RPC_EXPORT_TIMEOUT_SECONDS='0.1')
+        result = self.run_export(env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('timed out', result.stderr)
+        self.assertFalse(self.dest.exists())
+        self.assertFalse(list(self.work.glob('.rpc-export.*')))
 
     def test_hanging_export_times_out_without_publication(self):
         env = dict(self.env, SLOW_EXPORT='export_typespec.ores',

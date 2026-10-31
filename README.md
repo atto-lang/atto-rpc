@@ -198,9 +198,15 @@ contract graph and stream exactly one output format to `stdio.stdout.write`.
 They never use `println` or insert a separator between `TextDocument`
 fragments. `scripts/export-contracts.sh` requires a passing `scripts/test.sh`
 preflight against an **exact, clean `SOURCE_REF` compiler checkout**. It checks
-each source before executing, captures each complete guest stream, rejects
-empty or over-1-MiB artifacts, and publishes a **new** directory only if all
-four exports complete. No partial destination is published on failure.
+each source before executing and captures each complete guest stream. The
+`scripts/emit-guest-document.py` helper uses the existing bounded-process
+runner to terminate the process group if it exceeds its output or time
+budget: **64 KiB** combined stdout/stderr for each compiler check,
+**1 MiB** combined stdout/stderr for each artifact-producing execution,
+and a configurable per-process timeout (**120 seconds** by default).
+The pinned-compiler test preflight is also bounded. Invalid UTF-8,
+empty artifacts, and any failed process prevent publishing a **new** output
+directory. No partial destination is published on failure.
 
 ```bash
 # Use a clean Java compiler checkout at the pinned SOURCE_REF.
@@ -226,15 +232,19 @@ python3 scripts/verify-contract-output.py \
 The independent validator checks JSON Schema 2020-12, MessagePack field
 numbers/grammar, and runs external `protoc`/`tsp` on **actual exported
 artifacts**. Missing validators cause a failure, never a skipped success.
-The six export harness tests use an explicit **fake compiler** to verify
-byte-preservation and rejection/cleanup paths. The five validator self-tests
+The eleven export harness tests use an explicit **fake compiler** to verify
+byte-preservation, process timeout, stdout/stderr overflow, UTF-8 rejection,
+fixture parity, and failure/cleanup paths. The five validator self-tests
 cover its Python parsing/rejection logic. **Neither set is native guest
 execution evidence.** An actual pinned compiler run, complete artifact
 validation, and a reviewed release budget are still required.
 
-The 1-MiB-per-file export guard applies *after* execution; it is not a
-runtime memory, input-byte, recursion-depth, or compute-time bound and cannot
-authorize untrusted RPC contract ingestion.
+The live output/time budget limits captured output and wall-clock time for
+each invoked subprocess, but it is **not** a guest heap-memory limit, an
+untrusted input-byte limit, a recursion-depth limit, or a total multi-process
+work budget. These gaps still block untrusted RPC contract ingestion. The
+compiler executable must also be independently attested to the pinned source
+checkout; the SHA/clean-checkout checks do not establish binary provenance.
 
 ## Compiler compatibility checkpoint (2026-10-06)
 

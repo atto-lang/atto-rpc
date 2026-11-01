@@ -31,13 +31,27 @@ fnc duplicate_message_field_name_is_invalid(): TestOutcome {
     "different field numbers cannot make duplicate names valid");
 }
 
+fnc field_number_above_protobuf_max_is_rejected(): TestOutcome {
+  val field_value = rpc.field("id", 536870912, "536870912", rpc.int32_type(), true, false);
+  return expect_false(field_value.is_valid(),
+    "protobuf field numbers must remain inside their 29-bit domain");
+}
+
+fnc last_reserved_protobuf_number_is_rejected(): TestOutcome {
+  val field_value = rpc.field("id", 19999, "19999", rpc.int32_type(), true, false);
+  return expect_false(field_value.is_valid(),
+    "the inclusive upper endpoint of reserved field IDs must fail");
+}
+
 pub routine main(): void {
   val TestSuite suite = new TestSuite("rpc", arr[
     new TestCase("reserved_protobuf_number_rejected", reserved_protobuf_number_rejected, false, ""),
     new TestCase("duplicate_message_number_rejected", duplicate_message_number_rejected, false, ""),
     new TestCase("unnamed_message_reference_denied", unnamed_message_reference_denied, false, ""),
     new TestCase("zero_wire_field_number_is_invalid", zero_wire_field_number_is_invalid, false, ""),
-    new TestCase("duplicate_message_field_name_is_invalid", duplicate_message_field_name_is_invalid, false, "")
+    new TestCase("duplicate_message_field_name_is_invalid", duplicate_message_field_name_is_invalid, false, ""),
+    new TestCase("field_number_above_protobuf_max_is_rejected", field_number_above_protobuf_max_is_rejected, false, ""),
+    new TestCase("last_reserved_protobuf_number_is_rejected", last_reserved_protobuf_number_is_rejected, false, "")
   ]);
   val TestOptions options = new TestOptions("", false, true);
   val RunSummary summary = run_suite(rt borrow suite, rt borrow options);

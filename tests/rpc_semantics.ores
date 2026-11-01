@@ -300,5 +300,9 @@ pub routine main(): void {
   )));
   stdio.println(missing_builder.build().is_err());
 
+  // Previously only printed: now enforce registry cardinality with executable oracles.
+  if contracts.message_count() != 2 then panic("message registry count"); fi
+  if contracts.method_count() != 1 then panic("RPC registry count"); fi
+  if contracts.http_handler_count() != 1 then panic("HTTP handler registry count"); fi
   return;
 }

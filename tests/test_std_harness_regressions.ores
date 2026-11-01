@@ -1,0 +1,24 @@
+import class TestCase, TestSuite, TestOptions, TestOutcome, RunSummary from "std/testing";
+import fnc expect_true, expect_false, expect_equal_int, expect_equal_string, run_suite, require_success, fail from "std/testing";
+import module rpc from "../src/rpc.ores";
+fnc reserved_protobuf_number_rejected(): TestOutcome {
+  val reserved = rpc.field("id", 19000, "19000", rpc.int32_type(), true, false);
+  return expect_false(reserved.is_valid(), "protobuf reserved field 19000 must be rejected");
+}
+fnc duplicate_message_number_rejected(): TestOutcome {
+  val message = rpc.message("Duplicate", arr[
+    rpc.field("a", 1, "1", rpc.string_type(), true, false),
+    rpc.field("b", 1, "1", rpc.bool_type(), false, false)
+  ]);
+  return expect_false(message.is_valid(), "two message fields cannot share a wire number");
+}
+pub routine main(): void {
+  val TestSuite suite = new TestSuite("rpc", arr[
+    new TestCase("reserved_protobuf_number_rejected", reserved_protobuf_number_rejected, false, ""),
+    new TestCase("duplicate_message_number_rejected", duplicate_message_number_rejected, false, "")
+  ]);
+  val TestOptions options = new TestOptions("", false, true);
+  val RunSummary summary = run_suite(rt borrow suite, rt borrow options);
+  require_success(rt borrow summary);
+  return;
+}

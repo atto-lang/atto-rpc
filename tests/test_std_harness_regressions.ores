@@ -16,11 +16,28 @@ fnc unnamed_message_reference_denied(): TestOutcome {
   return expect_false(rpc.message_type("").is_valid(),
     "named RPC message references cannot use an empty name");
 }
+fnc zero_wire_field_number_is_invalid(): TestOutcome {
+  val field_value = rpc.field("id", 0, "0", rpc.int32_type(), true, false);
+  return expect_false(field_value.is_valid(),
+    "wire field numbers start at one");
+}
+
+fnc duplicate_message_field_name_is_invalid(): TestOutcome {
+  val message = rpc.message("Collision", arr[
+    rpc.field("same", 1, "1", rpc.string_type(), true, false),
+    rpc.field("same", 2, "2", rpc.bool_type(), false, false)
+  ]);
+  return expect_false(message.is_valid(),
+    "different field numbers cannot make duplicate names valid");
+}
+
 pub routine main(): void {
   val TestSuite suite = new TestSuite("rpc", arr[
     new TestCase("reserved_protobuf_number_rejected", reserved_protobuf_number_rejected, false, ""),
     new TestCase("duplicate_message_number_rejected", duplicate_message_number_rejected, false, ""),
-    new TestCase("unnamed_message_reference_denied", unnamed_message_reference_denied, false, "")
+    new TestCase("unnamed_message_reference_denied", unnamed_message_reference_denied, false, ""),
+    new TestCase("zero_wire_field_number_is_invalid", zero_wire_field_number_is_invalid, false, ""),
+    new TestCase("duplicate_message_field_name_is_invalid", duplicate_message_field_name_is_invalid, false, "")
   ]);
   val TestOptions options = new TestOptions("", false, true);
   val RunSummary summary = run_suite(rt borrow suite, rt borrow options);

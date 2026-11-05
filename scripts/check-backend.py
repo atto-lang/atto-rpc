@@ -31,8 +31,12 @@ def require_source(variable, pin):
     return source
 
 def local_file(relative):
-    if not isinstance(relative, str) or Path(relative).is_absolute():
-        raise RuntimeError('Contract paths must be relative to this repository')
+    if (not isinstance(relative, str) or not relative
+            or Path(relative).is_absolute() or '\\' in relative
+            or relative != Path(relative).as_posix()
+            or any(part in ('.', '..') for part in relative.split('/'))
+            or any(ord(char) < 32 or ord(char) == 127 for char in relative)):
+        raise RuntimeError('Contract paths must be canonical relative paths')
     path = (ROOT / relative).resolve()
     if ROOT.resolve() not in path.parents or not path.is_file():
         raise RuntimeError(f'Missing or outside-repository contract file: {relative}')
@@ -62,7 +66,7 @@ def load_contract():
             raise RuntimeError('Duplicate LLVM rejection probe')
         seen.add(path)
         diagnostic = probe['diagnostic']
-        if not isinstance(diagnostic, str) or not diagnostic.startswith('oreslang-llvmc: expected ') or '\n' in diagnostic:
+        if not isinstance(diagnostic, str) or not diagnostic.startswith('oreslang-llvmc: expected ') or not (0 < len(diagnostic) <= 256) or any(not (' ' <= ch <= '~') for ch in diagnostic):
             raise RuntimeError('Expected a specific unsupported-syntax diagnostic')
     return contract
 

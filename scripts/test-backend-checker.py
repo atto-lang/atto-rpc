@@ -102,4 +102,27 @@ class BoundedCompilerOutput(unittest.TestCase):
         with self.assertRaises(UnicodeDecodeError):
             checker.run_bounded([sys.executable, '-c', "import os;os.write(1,bytes([255]))"])
 
+
+class ExactNegativeCompilerReceipt(unittest.TestCase):
+    def test_accepted_canonical_single_line_and_lf(self):
+        probe={'path':'probe.ores','diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for text in (probe['diagnostic'],probe['diagnostic']+'\n'):
+            checker.check_rejection(subprocess.CompletedProcess([],1,'',text),probe)
+
+    def test_no_stdout_even_if_only_whitespace(self):
+        probe={'path':'probe.ores','diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for text in (' ', '\n', '\t', '  \n', 'fake success'):
+            with self.subTest(text=repr(text)), self.assertRaises(RuntimeError):
+                checker.check_rejection(subprocess.CompletedProcess([],1,text,probe['diagnostic']),probe)
+
+    def test_padding_multiline_and_crlf_cannot_certify_rejection(self):
+        probe={'path':'probe.ores','diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for text in (' '+probe['diagnostic'],
+                     probe['diagnostic']+'  ',
+                     '\n'+probe['diagnostic'],
+                     probe['diagnostic']+'\n\n',
+                     probe['diagnostic']+'\r\n'):
+            with self.subTest(text=repr(text)), self.assertRaises(RuntimeError):
+                checker.check_rejection(subprocess.CompletedProcess([],1,'',text),probe)
+
 if __name__ == '__main__': unittest.main()

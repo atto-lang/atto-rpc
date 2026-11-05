@@ -44,6 +44,21 @@ class BackendChecks(unittest.TestCase):
     def test_escape_paths_rejected(self):
         for path in ('../outside', str(self.root/'probe.ores')):
             with self.subTest(path=path), self.assertRaises(RuntimeError): checker.local_file(path)
+    def test_noncanonical_contract_paths_denied_without_normalization(self):
+        for alias in ('./probe.ores', 'nested/../probe.ores', 'probe.ores/',
+                      'probe.ores//', 'probe.ores\\\\', 'probe.ores\n',
+                      'probe.ores\t'):
+            with self.subTest(alias=repr(alias)), self.assertRaises(RuntimeError):
+                checker.local_file(alias)
+        self.assertEqual(checker.local_file('probe.ores'), self.root/'probe.ores')
+
+    def test_rejection_diagnostic_controls_and_oversized_fields_denied(self):
+        base = self.contract['llvm']['rejection_probes'][0]['diagnostic']
+        for bad in (base+'\r', base+'\t', base+'\x1b[31m', base+'\x00', base+' '*300):
+            with self.subTest(bad=repr(bad)), self.assertRaises(RuntimeError):
+                self.contract['llvm']['rejection_probes'][0]['diagnostic'] = bad
+                self.load()
+
     def test_symlink_escape_rejected(self):
         (self.root/'escape').symlink_to('/etc/hosts')
         with self.assertRaises(RuntimeError): checker.local_file('escape')

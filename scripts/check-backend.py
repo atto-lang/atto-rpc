@@ -67,7 +67,8 @@ def load_contract():
     return contract
 
 def check_rejection(result, probe):
-    if result.returncode != 1 or result.stdout.strip() or result.stderr.strip() != probe['diagnostic']:
+    if (result.returncode != 1 or result.stdout != '' or
+            result.stderr not in (probe['diagnostic'], probe['diagnostic'] + '\n')):
         raise RuntimeError(f"Unexpected rejection result for {probe['path']}: exit={result.returncode}\n{result.stderr}")
 
 def main():

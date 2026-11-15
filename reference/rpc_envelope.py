@@ -4,7 +4,7 @@ import re
 
 MAX_FRAME_BYTES = 65536
 MAX_CALL_ID = (1 << 53) - 1
-_METHOD = re.compile(r"[a-z][a-z0-9_]{0,63}\\Z")
+_METHOD = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
 class EnvelopeError(ValueError):

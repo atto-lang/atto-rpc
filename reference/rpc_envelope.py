@@ -73,7 +73,7 @@ def encode_envelope(message):
     try:
         encoded = json.dumps(message, ensure_ascii=False, sort_keys=True,
                              separators=(",", ":"), allow_nan=False).encode("utf-8")
-    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
         raise EnvelopeError("unsupported JSON payload") from exc
     if len(encoded) > MAX_FRAME_BYTES:
         raise EnvelopeError("encoded envelope exceeds 65536 bytes")

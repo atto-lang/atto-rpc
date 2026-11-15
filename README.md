@@ -37,3 +37,9 @@ This README describes the project's intended role. It does not imply that the li
 AttoLang is the public name; preserve existing Oreslang/.ores compatibility and use canonical .atto for new portable library source. This README defines scope, not feature readiness.
 
 **Acceptance:** name exact source SHA/tree, runtime/toolchain, positive and negative checks and execution receipt before claiming support. Host-only tests and empty CI steps do not prove guest execution.
+
+## Experimental RPC envelope v1 (host contract only)
+
+The new `reference/rpc_envelope.py` provides deterministic UTF-8 JSON encode/decode for request, notification, response and error envelopes. The contract rejects duplicate JSON keys, unknown top-level fields, nonfinite constants, oversized messages (64 KiB), unsafe call IDs and invalid snake_case method/error names. Request and error responses are paired through a JS-safe numeric `id`; notifications intentionally have no ID.
+
+This is **not** a production RPC transport, authentication layer, cancellation protocol, streaming implementation, or AttoLang guest runtime. It is a deliberately bounded reference surface for future backend parity work. Run `python3 -m unittest discover -s tests -v` to execute local host-only checks. Transport authentication, deadlines and actor generation fencing remain required integration work.

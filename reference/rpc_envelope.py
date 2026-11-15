@@ -1,5 +1,6 @@
 """Transport-neutral RPC envelope v1 reference (host-only, no Atto guest)."""
 import json
+import math
 import re
 
 MAX_FRAME_BYTES = 65536
@@ -24,6 +25,33 @@ def _bad_constant(value):
     raise EnvelopeError("nonfinite JSON constant forbidden")
 
 
+def _check_json(value, depth=0):
+    """Accept bounded, unambiguous JSON values only (not arbitrary host objects)."""
+    if depth > 32:
+        raise EnvelopeError("JSON nesting exceeds 32")
+    if value is None or type(value) in (str, bool):
+        return
+    if type(value) is int:
+        if -MAX_CALL_ID <= value <= MAX_CALL_ID:
+            return
+        raise EnvelopeError("JSON integer exceeds interoperable 53-bit precision")
+    if type(value) is float:
+        if math.isfinite(value):
+            return
+        raise EnvelopeError("nonfinite JSON number")
+    if type(value) is list:
+        for child in value:
+            _check_json(child, depth + 1)
+        return
+    if type(value) is dict:
+        if any(type(key) is not str for key in value):
+            raise EnvelopeError("JSON object keys must be strings")
+        for child in value.values():
+            _check_json(child, depth + 1)
+        return
+    raise EnvelopeError("unsupported JSON payload type")
+
+
 def validate_envelope(message):
     if type(message) is not dict or message.get("v") != 1 or type(message.get("v")) is not int:
         raise EnvelopeError("v must be integer 1")
@@ -36,8 +64,11 @@ def validate_envelope(message):
             raise EnvelopeError("method must be a bounded snake_case name")
         if type(message.get("params")) not in (list, dict):
             raise EnvelopeError("params must be an object or array")
+        _check_json(message["params"])
     elif kind in ("response", "error"):
         keys = common | {"id"} | ({"result"} if kind == "response" else {"error"})
+        if kind == "response":
+            _check_json(message.get("result"))
         if kind == "error":
             err = message.get("error")
             if type(err) is not dict or set(err) != {"code", "message"}:
@@ -63,7 +94,7 @@ def decode_envelope(frame):
     try:
         message = json.loads(frame.decode("utf-8"), object_pairs_hook=_no_duplicates,
                              parse_constant=_bad_constant)
-    except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
+    except (UnicodeError, json.JSONDecodeError, RecursionError, ValueError) as exc:
         raise EnvelopeError("invalid UTF-8 JSON envelope") from exc
     return validate_envelope(message)
 

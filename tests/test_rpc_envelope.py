@@ -30,6 +30,26 @@ class EnvelopeContractTest(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(EnvelopeError):
                 encode_envelope(dict(base, **change))
 
+    def test_rejects_ambiguous_numeric_and_nested_payloads(self):
+        base = {"v": 1, "kind": "request", "id": 1,
+                "method": "get_user", "params": []}
+        too_deep = []
+        for _ in range(34):
+            too_deep = [too_deep]
+        for invalid in [[float("inf")], {3: "integer_key"},
+                        {"value": 1 << 60}, too_deep]:
+            with self.subTest(value_type=type(invalid).__name__), self.assertRaises(EnvelopeError):
+                encode_envelope(dict(base, params=invalid))
+        overflowed = (b'{"v":1,"kind":"request","id":1,'
+                      b'"method":"get_user","params":[1e9999]}')
+        with self.assertRaises(EnvelopeError):
+            decode_envelope(overflowed)
+
+    def test_rejects_nonfinite_response_payload(self):
+        with self.assertRaises(EnvelopeError):
+            encode_envelope({"v": 1, "kind": "response", "id": 4,
+                             "result": {"bad": float("nan")}})
+
     def test_invalid_json_and_size_limits(self):
         for blob in [b'\xff', b'[]', b' ' * 65537]:
             with self.assertRaises(EnvelopeError):

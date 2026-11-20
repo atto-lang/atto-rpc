@@ -1,0 +1,4 @@
+contract-projection	java	execution
+bounded-streaming	java	execution
+schema-rejection	java	execution
+negative-admission	java	rejection

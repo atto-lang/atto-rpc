@@ -1,198 +1,63 @@
-# oreslang-rpc
+> **AI agent instructions (organization-wide):** Before working on code, issues, or pull requests, read and follow the [organization `AGENTS.md`](https://github.com/atto-lang/.github/blob/main/AGENTS.md), including its **merge-first stealth-development policy**. Honor any repository-local `AGENTS.md`, explicit holds, and GitHub-enforced rules.
 
-Pure Oreslang RPC contracts, HTTP bindings, and interface-description generation.
+# atto-rpc
 
-There is no Java implementation layer in this package. The contract graph, validation, HTTP/RPC conversion, and schema emitters are all written in native Oreslang.
+Remote procedure call abstractions, transports, and protocol integration for AttoLang.
 
-## What it does
+## Naming migration and language authority
 
-`oreslang-rpc` keeps one transport-neutral contract graph and can project it in both directions:
+This repository is maintained at [atto-lang/atto-rpc](https://github.com/atto-lang/atto-rpc); use `https://github.com/atto-lang/atto-rpc.git` for Git remotes and canonical `.atto` source examples. The normative language contract is [atto-spec](https://github.com/atto-lang/atto-spec), with executable guest evidence tracked by [atto-platform-conformance](https://github.com/atto-lang/atto-platform-conformance). Follow current ownership, borrowing, effects, actor, and syntax rules there; do not infer implemented features from a README or unexecuted CI.
 
-- HTTP handler metadata -> RPC method definition
-- RPC method definition -> HTTP handler metadata
+## Responsibilities
 
-The same graph emits:
+RPC invocation, schema evolution, transport contracts, and cross-process safety.
 
-- JSON Schema 2020-12
-- Protocol Buffers v3 message definitions
-- gRPC service definitions, including client/server/bidirectional streaming flags
-- MessagePack shared definitions (`mpackdef v1`)
-- TypeSpec models and HTTP route decorators
+## Design guidelines
 
-Those outputs are intended to become stable inputs for later TypeScript, Rust, Go, Dart, Gleam, Swift, Kotlin, and other client generators.
+- Keep application-facing contracts separate from hosted Atto services.
+- Explicitly specify error, cancellation, concurrency, and resource-lifecycle behavior where applicable.
+- Document supported compiler backends, host restrictions, wire formats, and compatibility constraints.
 
-## HTTP routing interoperability
+## Development and verification
 
-The package deliberately uses the same stable route metadata already carried by
-[`oreslang-http-routing`](https://github.com/ores-truffle-oreslang/oreslang-http-routing):
+Use the source tree and CI for verified build/test commands. Tests should cover positive cases, invalid inputs, lifecycle behavior, and cross-backend interoperability where relevant.
 
-- `handler_id`
-- `pipeline_id`
-- `contract_id`
-- `operation_id`
+## Status
 
-The routing library owns path matching and dispatch. The RPC library owns wire-contract identity, request/response types, RPC service/method identity, and generated schemas.
+This README describes the project's intended role. It does not imply that the listed APIs or platforms are already implemented or supported.
 
-A route generated from an RPC definition therefore preserves the exact IDs expected by `RouterBuilder.route(...)`. The reverse direction accepts those same HTTP handler fields and raises them into an RPC method.
+## Related
 
-HTTP request fields can also be bound explicitly without polluting the transport-neutral message type:
+- [AttoLang](https://github.com/atto-lang)
+- [Language specification](https://github.com/atto-lang/atto-spec)
+- [Platform conformance](https://github.com/atto-lang/atto-platform-conformance)
 
-```ores
-contracts.add_http_field_binding(
-  rpc.http_path_field(42, "id", "id")
-).unwrap();
+## Repository ownership and contribution routing
 
-contracts.add_http_field_binding(
-  rpc.http_query_field(42, "include_deleted", "includeDeleted")
-).unwrap();
-```
+**Belongs here:** RPC interface/schema and transport adapters, remote errors, deadlines, cancellation, stable serialization contracts and actor-safe calls.
 
-Path/query/header/cookie bindings are validated against the RPC request message. Path fields must be required. Unbound request fields remain payload/body data when TypeSpec is generated.
+**Belongs elsewhere:** HTTP route matching in atto-http-routing; serialization primitives in atto-serialization-and-validation; hosted gateway/service control in atto-co.
 
-See `examples/http_routing_interop.ores`.
+**Security and portability boundary:** Authenticate peers and capabilities, bound payloads and retries, fence stale actor/tenant generations and reject non-serializable closures over channels.
 
-## Contract model
+AttoLang is the canonical project name; new source, examples and documentation use `.atto` and the `atto-lang` repository organization. This README defines scope, not feature readiness.
 
-Core definitions live in `src/rpc.ores`:
+**Acceptance:** name exact source SHA/tree, runtime/toolchain, positive and negative checks and execution receipt before claiming support. Host-only tests and empty CI steps do not prove guest execution.
 
-- `TypeRef`
-- `FieldDef`
-- `MessageDef`
-- `RpcMethodDef`
-- `HttpHandlerDef`
-- `ContractSet`
-- `ContractBuilder`
+## Experimental RPC envelope v1 (host contract only)
 
-The builder fails closed on duplicate message names, duplicate wire field names/numbers, duplicate contract IDs, duplicate operation IDs, duplicate HTTP method/path pairs, unresolved request/response message types, and HTTP bindings without a matching RPC method.
+The new `reference/rpc_envelope.py` provides deterministic UTF-8 JSON encode/decode for request, notification, response and error envelopes. The contract rejects duplicate JSON keys, unknown top-level fields, nonfinite constants, oversized messages (64 KiB), unsafe call IDs and invalid snake_case method/error names. Request and error responses are paired through a JS-safe numeric `id`; notifications intentionally have no ID.
 
-Field numbers are shared by protobuf and MessagePack so one compatibility policy governs both representations.
+This is **not** a production RPC transport, authentication layer, cancellation protocol, streaming implementation, or AttoLang guest runtime. It is a deliberately bounded reference surface for future backend parity work. Run `python3 -m unittest discover -s tests -v` to execute local host-only checks. Transport authentication, deadlines and actor generation fencing remain required integration work.
 
-Message, field, service, RPC method, and referenced message type names
-must satisfy the compiler's identifier predicate before they can become
-schema/IDL source. HTTP field binding names must satisfy the identifier
-predicate, while external wire names must satisfy the route-segment predicate.
+### Strict JSON numeric and nesting boundary
 
-HTTP field bindings also reject two request fields claiming the same external
-wire parameter within one contract and location. Equivalent names in distinct
-locations or distinct contracts remain separate; header-name case folding and
-full transport parser compatibility still need independent verification.
-The low-level emitters still require trusted schema IDs, package names,
-namespace names, and route templates until dedicated escaping/admission
-contracts are implemented; do not feed untrusted strings to those arguments.
+All params/results are recursively validated before encoding or after decoding: maximum 32 nested levels, string-only object keys, finite floating-point numbers, and signed integers within the exact JavaScript-safe ±(2^53−1) range. Encode wider integer values using a separately specified decimal-string schema. Malformed exponential values such as `1e9999` are rejected even if a parser maps them to infinity. This reference is still host-only.
 
-## Example
+## Legacy provenance and transfer verification
 
-```ores
-import module rpc from "./src/rpc.ores";
+The historical predecessor was `ores-truffle-oreslang/oreslang-rpc`. This repository is maintained in `atto-lang`; matching names or imported history do not establish a preserved numeric repository ID or code parity. Preserve working legacy `.ores` inputs and historical package/CLI aliases until compiler-backed replacements and consumers are verified. New source follows canonical `.atto` contracts.
 
-pub routine main(): void {
-  val request = rpc.message("GetUserRequest", arr[
-    rpc.field("id", 1, "1", rpc.string_type(), true, false)
-  ]);
+Typed RPC protocol and transport abstractions and portable tests belong here; production gateway configuration and tenant service control do not. [atto-lang](https://github.com/atto-lang) maintains language, portable libraries and tooling; [atto-co](https://github.com/atto-co) separately governs commercial deployment, tenant infrastructure, identity, marketplace and billing. Any further original-ID transfer or commercial carve-out requires separate owner authorization and independent security review. This document authorizes no transfer or private-source mirror.
 
-  val response = rpc.message("User", arr[
-    rpc.field("id", 1, "1", rpc.string_type(), true, false),
-    rpc.field("display_name", 2, "2", rpc.string_type(), true, false)
-  ]);
-
-  let contracts = rpc.builder();
-  contracts.add_message(request).unwrap();
-  contracts.add_message(response).unwrap();
-
-  val method = rpc.rpc_method(
-    42,
-    "Users",
-    "GetUser",
-    "users.get",
-    "GetUserRequest",
-    "User"
-  );
-
-  contracts.add_rpc_as_http(
-    method,
-    "GET",
-    "/users/{id}",
-    1001,
-    7
-  ).unwrap();
-
-  val graph = contracts.build().unwrap();
-
-  val outputs = rpc.generate_all(
-    rt borrow graph,
-    "https://example.test/schema/rpc",
-    "example.rpc",
-    "Example.Rpc"
-  );
-
-  // TextDocument is a sequence of native Oreslang String fragments.
-  // A CLI/file/socket adapter can stream them without a Java StringBuilder.
-  stdio.println(outputs.protobuf.part_count());
-}
-```
-
-## Native text emission
-
-The current Oreslang core intentionally has a small string surface. Generators therefore return a `TextDocument`: an ordered sequence of immutable string fragments and newlines.
-
-That has two advantages:
-
-1. schema generation requires no Java/host string builder;
-2. callers can stream fragments directly to stdout, files, sockets, channels, or future build-tool APIs without first constructing one giant host string.
-
-## MessagePack
-
-MessagePack has no universal schema language equivalent to `.proto`. This package emits a deliberately small `mpackdef 1` shared definition. Maps use stable positive integer field keys matching protobuf field numbers.
-
-See `docs/MESSAGEPACK.md` for compatibility rules.
-
-## Validation
-
-`tests/rpc_semantics.ores` exercises:
-
-- HTTP -> RPC conversion
-- RPC -> HTTP conversion
-- contract/operation ID preservation
-- request/response registration
-- duplicate wire-field rejection
-- missing-message rejection
-- JSON Schema generation
-- protobuf/gRPC generation
-- MessagePack definition generation
-- TypeSpec generation
-
-The repository pins the compiler revision in `SOURCE_REF`.
-
-## Compiler compatibility checkpoint (2026-10-06)
-
-This repository tracks the latest 10 compiler PRs as **unmerged proposals**, without changing its stable compiler pin or API behavior. See [docs/compiler-pr-sync.md](docs/compiler-pr-sync.md) for oreslang-rpc-specific migration invariants, dependencies and validation gates.
-
-## Runner CI and native-suite coverage
-
-The `Test runner contracts` workflow uses a compiler test double to check the
-runner's working directory, exact arguments, check-before-run ordering, output
-comparison, and failure propagation. It rejects floating SOURCE_REF values and
-dirty explicit compiler checkouts. Actions have read-only permissions and no
-persisted credentials.
-
-This is a runner gate, not evidence that the native RPC suite passes. The
-2026-10-07 probe against compiler `5ffc52d9297d175307094d530293c69f1cafc7cd`
-rejected mutation through readonly `messages_copy` in the library. The existing
-SOURCE_REF remains unchanged until ownership migration and golden-output
-validation succeed on a pinned compiler.
-
-## Backend compatibility
-
-See [the compiler compatibility contract](docs/BACKENDS.md) for pinned Java/LLVM
-revisions, reproducible checks, and unsupported features.
-
-## Repository ownership and migration (2026-11-08)
-
-The language is publicly **AttoLang** (formerly Oreslang), while the repository remains `ores-truffle-oreslang/oreslang-rpc`. Keep supported `.ores` source, historical import/package IDs and command names working unless a reviewed compatibility change proves replacements.
-
-- **Belongs here:** typed RPC protocol and transport abstractions and portable tests.
-- **Explicitly out of scope:** production API gateway configuration or AttoCo multi-tenant service control.
-- **Organization split:** [atto-lang](https://github.com/atto-lang) maintains the compiler, portable language libraries and demo ecosystem; [atto-co](https://github.com/atto-co) handles independently governed commercial cloud hosting, tenant identity, billing, deployment control, networking and infrastructure. Related `atto-*` repos are not assumed transferred copies.
-- **Proposed first move:** transfer this **same GitHub repository** to `atto-lang/oreslang-rpc`, preserving numeric ID, name and Git history, after individual authorizations. No direct old-org transfer to `atto-co` is authorized now. Future product spinouts need a separate decision.
-
-**Migration and security checklist:** post ownership claim to [coordination issue #26](https://github.com/ores-truffle-oreslang/.github/issues/26); follow private [runbook draft #25](https://github.com/ores-truffle-oreslang/.github/pull/25). Record ID, exact head SHA/tree, PR/release/package consumers, Apps/webhooks, Pages, secrets, Actions/runners, branch/ruleset enforcement, target visibility/access, source/target admin approval, independent security review and rollback owner. Never mirror private source to evade a blocked transfer. Verify unchanged identity/history/tree and re-enable protections after the authorized GitHub transfer, then update external references and run exact-head CI. Jobs with zero executed steps (`steps=[]`/`null`) are `NOT_EXECUTED`, not success. Host-only and static tests do not prove native AttoLang guest or production networking capabilities.
+Before an authorized transfer, coordinate in [migration issue #26](https://github.com/ores-truffle-oreslang/.github/issues/26) and review the authorized runbook. Record source/target administrators, numeric ID, exact SHA/tree, history, visibility, access, rulesets, open PRs/issues, releases, packages, consumers, CI/billing/runners, secrets, deploy keys, apps, webhooks, Pages and rollback ownership. Verify unchanged ID/history/tree and restored controls afterward; execute exact-head tests before changing consumers. Zero-step jobs are NOT_EXECUTED; host-only and source-free checks do not certify compiled guest execution or production capabilities.

@@ -53,3 +53,11 @@ This is **not** a production RPC transport, authentication layer, cancellation p
 ### Strict JSON numeric and nesting boundary
 
 All params/results are recursively validated before encoding or after decoding: maximum 32 nested levels, string-only object keys, finite floating-point numbers, and signed integers within the exact JavaScript-safe ±(2^53−1) range. Encode wider integer values using a separately specified decimal-string schema. Malformed exponential values such as `1e9999` are rejected even if a parser maps them to infinity. This reference is still host-only.
+
+## Legacy provenance and transfer verification
+
+The historical predecessor was `ores-truffle-oreslang/oreslang-rpc`. This repository is maintained in `atto-lang`; matching names or imported history do not establish a preserved numeric repository ID or code parity. Preserve working legacy `.ores` inputs and historical package/CLI aliases until compiler-backed replacements and consumers are verified. New source follows canonical `.atto` contracts.
+
+Typed RPC protocol and transport abstractions and portable tests belong here; production gateway configuration and tenant service control do not. [atto-lang](https://github.com/atto-lang) maintains language, portable libraries and tooling; [atto-co](https://github.com/atto-co) separately governs commercial deployment, tenant infrastructure, identity, marketplace and billing. Any further original-ID transfer or commercial carve-out requires separate owner authorization and independent security review. This document authorizes no transfer or private-source mirror.
+
+Before an authorized transfer, coordinate in [migration issue #26](https://github.com/ores-truffle-oreslang/.github/issues/26) and review the authorized runbook. Record source/target administrators, numeric ID, exact SHA/tree, history, visibility, access, rulesets, open PRs/issues, releases, packages, consumers, CI/billing/runners, secrets, deploy keys, apps, webhooks, Pages and rollback ownership. Verify unchanged ID/history/tree and restored controls afterward; execute exact-head tests before changing consumers. Zero-step jobs are NOT_EXECUTED; host-only and source-free checks do not certify compiled guest execution or production capabilities.

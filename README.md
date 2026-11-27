@@ -194,7 +194,7 @@ The repository pins the compiler revision in `SOURCE_REF`.
 ## Native full-document export and independent validation
 
 The four `tests/export_*.ores` entry points each generate the same validated
-contract graph and stream exactly one output format to `stdio.stdout.write`.
+contract graph and stream exactly one output format to `stdio.out.write`.
 They never use `println` or insert a separator between `TextDocument`
 fragments. `scripts/export-contracts.sh` requires a passing `scripts/test.sh`
 preflight against an **exact, clean `SOURCE_REF` compiler checkout**. It checks

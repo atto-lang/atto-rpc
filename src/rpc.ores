@@ -6,6 +6,26 @@
 
 define module rpc as
 
+  // Reject cross-IDL reserved words before source generation. A single
+  // conservative admission policy avoids accidentally producing names valid
+  // in one output format but keywords in another.
+  fnc safe_idl_identifier(String name): bool {
+    if !name.is_identifier(); then return false; fi
+    for (const reserved of arr[
+      "syntax", "package", "import", "option", "message", "enum",
+      "service", "rpc", "returns", "stream", "map", "repeated",
+      "optional", "required", "oneof", "reserved", "extend",
+      "extensions", "group", "to", "max", "true", "false",
+      "namespace", "model", "interface", "op", "using", "is",
+      "alias", "string", "bool", "bytes", "int32", "int64",
+      "float", "double", "unknown",
+      "str", "int", "bin", "any", "timestamp", "array"
+    ]) {
+      if name == reserved; then return false; fi
+    }
+    return true;
+  }
+
   // Type kinds:
   // 0 string, 1 bool, 2 int32, 3 int64, 4 float32, 5 float64,
   // 6 bytes, 7 named message, 8 timestamp, 9 any/json value.
@@ -21,12 +41,49 @@ define module rpc as
       if self.kind < 0 || self.kind > 9; then
         return false;
       fi
-      if self.kind == 7 && !self.name.is_identifier(); then
+      if self.kind == 7 && !safe_idl_identifier(self.name); then
         return false;
       fi
       return true;
     }
   end
+
+  // Canonical decimal formatting without a host integer formatter. The pinned
+  // Java compiler evaluates / as floating-point, so use at most nine bounded
+  // subtractions for each base-10 place. The wire field range has nine digits.
+  fnc decimal_digit(int digit): String {
+    if digit == 0; then return "0";
+    elseif digit == 1; then return "1";
+    elseif digit == 2; then return "2";
+    elseif digit == 3; then return "3";
+    elseif digit == 4; then return "4";
+    elseif digit == 5; then return "5";
+    elseif digit == 6; then return "6";
+    elseif digit == 7; then return "7";
+    elseif digit == 8; then return "8";
+    else return "9";
+    fi
+  }
+
+  fnc canonical_field_number(int number): String {
+    let int remaining = number;
+    let String output = "";
+    let bool started = false;
+    for (const place of arr[100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1]) {
+      let int digit = 0;
+      for (let int attempt = 0; attempt < 9; attempt = attempt + 1) {
+        if remaining >= place; then
+          remaining = remaining - place;
+          digit = digit + 1;
+        fi
+      }
+      if digit > 0 || started || place == 1; then
+        output = output + decimal_digit(digit);
+        started = true;
+      fi
+    }
+    return output;
+  }
 
   // number_text is intentionally stored beside number. The current pure
   // Oreslang stdlib does not yet expose a stable int->String formatting API;
@@ -49,14 +106,25 @@ define module rpc as
     }
 
     pub is_valid(): bool {
-      if !self.name.is_identifier(); then
+      if !safe_idl_identifier(self.name); then
         return false;
       fi
       if self.number <= 0 || self.number > 536870911 || self.number_text == ""; then
         return false;
       fi
+      // Proto3 repeated fields cannot carry an independent required/presence
+      // qualifier. Reject a cross-IDL contract that cannot round-trip its
+      // stated requiredness through the protobuf wire.
+      if self.required && self.repeated; then
+        return false;
+      fi
       // Protocol Buffers reserves 19000..19999 for its own implementation.
       if self.number >= 19000 && self.number <= 19999; then
+        return false;
+      fi
+      // A caller cannot supply a different wire number or inject IDL tokens.
+      // Leading zeros, signs, whitespace and all non-decimal spellings reject.
+      if self.number_text != canonical_field_number(self.number); then
         return false;
       fi
       return self.type_value.is_valid();
@@ -85,10 +153,11 @@ define module rpc as
     }
 
     pub is_valid(): bool {
-      if !self.name.is_identifier(); then
+      if !safe_idl_identifier(self.name); then
         return false;
       fi
 
+      if self.field_count() > 128; then return false; fi
       for (let int index = 0; index < self.field_count(); index = index + 1) {
         val FieldDef field_value = self.fields_value.get(index);
         if !field_value.is_valid(); then
@@ -122,10 +191,11 @@ define module rpc as
       if self.contract_id < 0; then
         return false;
       fi
-      if !self.service.is_identifier() || !self.name.is_identifier() || self.operation_id == ""; then
+      if !safe_idl_identifier(self.service) || !safe_idl_identifier(self.name) ||
+         self.operation_id == ""; then
         return false;
       fi
-      if !self.request_type.is_identifier() || !self.response_type.is_identifier(); then
+      if !safe_idl_identifier(self.request_type) || !safe_idl_identifier(self.response_type); then
         return false;
       fi
       return self.streaming_kind >= 0 && self.streaming_kind <= 3;
@@ -163,10 +233,11 @@ define module rpc as
       if self.handler_id < 0 || self.contract_id < 0; then
         return false;
       fi
-      if self.operation_id == "" || !self.rpc_service.is_identifier() || !self.rpc_name.is_identifier(); then
+      if self.operation_id == "" ||
+         !safe_idl_identifier(self.rpc_service) || !safe_idl_identifier(self.rpc_name); then
         return false;
       fi
-      if !self.request_type.is_identifier() || !self.response_type.is_identifier(); then
+      if !safe_idl_identifier(self.request_type) || !safe_idl_identifier(self.response_type); then
         return false;
       fi
       return self.streaming_kind >= 0 && self.streaming_kind <= 3;
@@ -192,7 +263,7 @@ define module rpc as
       fi
       // These values become TypeSpec names/decorator arguments. Never
       // interpolate arbitrary contract text into generated source syntax.
-      if !self.field_name.is_identifier() || !self.wire_name.is_route_segment(); then
+      if !safe_idl_identifier(self.field_name) || !self.wire_name.is_route_segment() || self.wire_name.starts_with("["); then
         return false;
       fi
       return self.location >= 0 && self.location <= 3;
@@ -297,6 +368,93 @@ define module rpc as
     }
   end
 
+  // Restrict raw TypeSpec @route string interpolation to a small ASCII
+  // canonical path grammar: slash-separated literal or {identifier} segments.
+  // Reject queries, fragments, controls, quotes, mixed templates, and escapes.
+  fnc safe_http_path(String path): bool {
+    if path == "/"; then return true; fi
+    if !path.starts_with("/"); then return false; fi
+    val segments = path.split_literal("/");
+    if segments.size < 2 || segments.get(0) != ""; then return false; fi
+    for (let int idx = 1; idx < segments.size; idx = idx + 1) {
+      val String segment = segments.get(idx);
+      if segment == ""; then return false; fi
+      if segment.starts_with("{") || segment.ends_with("}"); then
+        val String name = segment.replace_literal("{", "").replace_literal("}", "");
+        if !name.is_identifier() || segment != "{" + name + "}"; then
+          return false;
+        fi
+        // Repeating a path placeholder makes request-field projection
+        // ambiguous even if the binding table contains only one entry.
+        for (let int earlier = 1; earlier < idx; earlier = earlier + 1) {
+          if segments.get(earlier) == segment; then return false; fi
+        }
+      elseif !segment.is_route_segment() || segment.starts_with("["); then
+        return false;
+      fi
+    }
+    return true;
+  }
+
+  // A quoted schema ID is not a general URL parser: the safe generator only
+  // admits HTTPS host labels and ASCII path segments without query/fragment.
+  fnc safe_schema_id(String value): bool {
+    val segments = value.split_literal("/");
+    if segments.size < 3 || segments.get(0) != "https:" || segments.get(1) != ""; then
+      return false;
+    fi
+    val host = segments.get(2).split_literal(".");
+    if host.size < 2; then return false; fi
+    for (const label of host) {
+      if !label.is_identifier(); then return false; fi
+    }
+    for (let int idx = 3; idx < segments.size; idx = idx + 1) {
+      if !segments.get(idx).is_route_segment(); then return false; fi
+    }
+    return true;
+  }
+
+  fnc safe_qualified_name(String value): bool {
+    val segments = value.split_literal(".");
+    for (const segment of segments) {
+      if !safe_idl_identifier(segment); then return false; fi
+    }
+    return true;
+  }
+
+  // HTTP header names are case-insensitive; Oreslang's pinned string API
+  // has literal replacement but no locale-independent ASCII lower primitive.
+  fnc header_ascii_key(String wire_name): String {
+    let String canonical = wire_name;
+    canonical = canonical.replace_literal("A", "a");
+    canonical = canonical.replace_literal("B", "b");
+    canonical = canonical.replace_literal("C", "c");
+    canonical = canonical.replace_literal("D", "d");
+    canonical = canonical.replace_literal("E", "e");
+    canonical = canonical.replace_literal("F", "f");
+    canonical = canonical.replace_literal("G", "g");
+    canonical = canonical.replace_literal("H", "h");
+    canonical = canonical.replace_literal("I", "i");
+    canonical = canonical.replace_literal("J", "j");
+    canonical = canonical.replace_literal("K", "k");
+    canonical = canonical.replace_literal("L", "l");
+    canonical = canonical.replace_literal("M", "m");
+    canonical = canonical.replace_literal("N", "n");
+    canonical = canonical.replace_literal("O", "o");
+    canonical = canonical.replace_literal("P", "p");
+    canonical = canonical.replace_literal("Q", "q");
+    canonical = canonical.replace_literal("R", "r");
+    canonical = canonical.replace_literal("S", "s");
+    canonical = canonical.replace_literal("T", "t");
+    canonical = canonical.replace_literal("U", "u");
+    canonical = canonical.replace_literal("V", "v");
+    canonical = canonical.replace_literal("W", "w");
+    canonical = canonical.replace_literal("X", "x");
+    canonical = canonical.replace_literal("Y", "y");
+    canonical = canonical.replace_literal("Z", "z");
+    return canonical;
+  }
+
   pub define class ContractBuilder as
     val Array<MessageDef> messages_value = arr[];
     val Array<RpcMethodDef> methods_value = arr[];
@@ -320,6 +478,9 @@ define module rpc as
     }
 
     pub add_http_field_binding(HttpFieldBindingDef binding_value): Result<bool, String> {
+      if self.http_field_bindings_value.size >= 512; then
+        return Err("HTTP binding budget exceeded");
+      fi
       if !binding_value.is_valid(); then
         return Err("invalid HTTP field binding");
       fi
@@ -337,6 +498,11 @@ define module rpc as
            existing.wire_name == binding_value.wire_name; then
           return Err("duplicate HTTP wire parameter");
         fi
+        if existing.contract_id == binding_value.contract_id &&
+           existing.location == 2 && binding_value.location == 2 &&
+           header_ascii_key(existing.wire_name) == header_ascii_key(binding_value.wire_name); then
+          return Err("duplicate HTTP header wire parameter");
+        fi
       }
 
       self.http_field_bindings_value.add(binding_value);
@@ -344,6 +510,7 @@ define module rpc as
     }
 
     pub add_message(MessageDef message_value): Result<bool, String> {
+      if self.messages_value.size >= 64; then return Err("message budget exceeded"); fi
       if !message_value.is_valid(); then
         return Err("invalid message definition");
       fi
@@ -359,6 +526,7 @@ define module rpc as
     }
 
     check_rpc(borrow RpcMethodDef method_value): Result<bool, String> {
+      if self.methods_value.size >= 256; then return Err("RPC method budget exceeded"); fi
       if !method_value.is_valid(); then
         return Err("invalid RPC method definition");
       fi
@@ -379,6 +547,7 @@ define module rpc as
     }
 
     check_http(borrow HttpHandlerDef handler_value): Result<bool, String> {
+      if self.http_handlers_value.size >= 256; then return Err("HTTP handler budget exceeded"); fi
       if !handler_value.is_valid(); then
         return Err("invalid HTTP handler definition");
       fi
@@ -504,8 +673,12 @@ define module rpc as
         fi
       }
 
-      // Cross-reference HTTP bindings with RPC identity.
+      // Cross-reference HTTP bindings with RPC identity and reject any path
+      // that could inject TypeSpec source through an @route string literal.
       for (const handler_value of self.http_handlers_value) {
+        if !safe_http_path(handler_value.path_template); then
+          return Err("invalid HTTP path template");
+        fi
         let bool found = false;
         for (const method_value of self.methods_value) {
           if method_value.contract_id == handler_value.contract_id &&
@@ -559,6 +732,67 @@ define module rpc as
 
         if !request_field_found; then
           return Err("HTTP field binding references an unknown request field");
+        fi
+        if binding_value.location == 0; then
+          let bool placeholder_found = false;
+          for (const handler_value of self.http_handlers_value) {
+            if handler_value.contract_id == binding_value.contract_id &&
+               handler_value.path_template.contains_literal("{" + binding_value.wire_name + "}"); then
+              placeholder_found = true;
+            fi
+          }
+          if !placeholder_found; then
+            return Err("HTTP path binding has no matching placeholder");
+          fi
+        fi
+      }
+
+      // Every path placeholder must be backed by an explicit path binding.
+      for (const handler_value of self.http_handlers_value) {
+        for (const segment of handler_value.path_template.split_literal("/")) {
+          if segment.starts_with("{"); then
+            let bool matched = false;
+            for (const binding_value of self.http_field_bindings_value) {
+              if binding_value.contract_id == handler_value.contract_id &&
+                 binding_value.location == 0 &&
+                 segment == "{" + binding_value.wire_name + "}"; then
+                matched = true;
+              fi
+            }
+            if !matched; then
+              return Err("HTTP path placeholder has no matching field binding");
+            fi
+          fi
+        }
+      }
+
+      // TypeSpec emits messages as models and services as interfaces in one
+      // namespace. Protect their names and generated HTTP request projection
+      // names from collisions that would otherwise change emitted meaning.
+      for (const method_value of self.methods_value) {
+        for (const message_value of self.messages_value) {
+          if method_value.service == message_value.name; then
+            return Err("RPC service collides with message model name");
+          fi
+        }
+      }
+      for (const handler_value of self.http_handlers_value) {
+        val String projection_name =
+          handler_value.rpc_service + "_" + handler_value.rpc_name + "_HttpRequest";
+        for (const message_value of self.messages_value) {
+          if message_value.name == projection_name; then
+            return Err("HTTP request projection collides with message model name");
+          fi
+        }
+        let int matching_projections = 0;
+        for (const other_handler of self.http_handlers_value) {
+          if projection_name ==
+             other_handler.rpc_service + "_" + other_handler.rpc_name + "_HttpRequest"; then
+            matching_projections = matching_projections + 1;
+          fi
+        }
+        if matching_projections > 1; then
+          return Err("duplicate generated HTTP request projection name");
         fi
       }
 
@@ -1417,6 +1651,55 @@ define module rpc as
     }
 
     return out;
+  }
+
+  // Checked generator for untrusted callers. The legacy lower-level
+  // emitters remain available for trusted, already-validated contract graphs.
+  // This API rejects unsafe top-level schema IDs/names before interpolation.
+  pub fnc generate_all_checked(
+    borrow ContractSet contracts,
+    String json_schema_id,
+    String proto_package,
+    String typespec_namespace
+  ): Result<GeneratedBundle, String> {
+    if !safe_schema_id(json_schema_id); then
+      return Err("unsafe JSON Schema ID");
+    fi
+    if !safe_qualified_name(proto_package); then
+      return Err("unsafe protobuf package");
+    fi
+    if !safe_qualified_name(typespec_namespace); then
+      return Err("unsafe TypeSpec namespace");
+    fi
+    // Reconstruct via the admission builder so a caller cannot bypass
+    // validation by manually creating a ContractSet with malformed members.
+    let ContractBuilder checked = builder();
+    for (let int index = 0; index < contracts.message_count(); index = index + 1) {
+      if checked.add_message(contracts.message_at(index)).is_err(); then
+        return Err("unsafe RPC message");
+      fi
+    }
+    for (let int index = 0; index < contracts.method_count(); index = index + 1) {
+      if checked.add_rpc(contracts.method_at(index)).is_err(); then
+        return Err("unsafe RPC method");
+      fi
+    }
+    for (let int index = 0; index < contracts.http_handler_count(); index = index + 1) {
+      if checked.add_http(contracts.http_handler_at(index)).is_err(); then
+        return Err("unsafe HTTP handler");
+      fi
+    }
+    for (let int index = 0; index < contracts.http_field_binding_count(); index = index + 1) {
+      if checked.add_http_field_binding(contracts.http_field_binding_at(index)).is_err(); then
+        return Err("unsafe HTTP field binding");
+      fi
+    }
+    val validated = checked.build();
+    if validated.is_err(); then
+      return Err("unsafe RPC contract graph");
+    fi
+    val ContractSet safe_contracts = validated.unwrap();
+    return Ok(generate_all(rt borrow safe_contracts, json_schema_id, proto_package, typespec_namespace));
   }
 
   pub fnc generate_all(

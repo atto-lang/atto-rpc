@@ -13,3 +13,10 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 scripts/test-backend-checker.py -v
+      - name: Verify generated-artifact parser contract self-tests
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/rpc-verification"
+          "$RUNNER_TEMP/rpc-verification/bin/python" -m pip install --disable-pip-version-check 'jsonschema==4.26.0'
+          "$RUNNER_TEMP/rpc-verification/bin/python" -m unittest discover -s tests -p 'test_*.py' -v
+          bash -n scripts/export-contracts.sh

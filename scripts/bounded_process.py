@@ -1,4 +1,6 @@
 """Bound captured compiler output while the process is running."""
+import os
+import signal
 import subprocess
 import threading
 
@@ -6,7 +8,19 @@ import threading
 def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
     if timeout <= 0 or max_bytes <= 0:
         raise ValueError('positive timeout and output budget required')
-    process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=(os.name == 'posix'))
+
+    def kill_process_tree():
+        # Compiler frontends may spawn workers; killing only the launcher can
+        # leave descendants running and holding stdout/stderr pipes open.
+        try:
+            if os.name == 'posix':
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        except ProcessLookupError:
+            pass
     chunks = [bytearray(), bytearray()]
     lock = threading.Lock()
     exceeded = threading.Event()
@@ -25,7 +39,7 @@ def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
                     total += len(block)
                     if total > max_bytes:
                         exceeded.set()
-                        process.kill()
+                        kill_process_tree()
         finally:
             pipe.close()
 
@@ -36,14 +50,18 @@ def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        process.kill()
+        kill_process_tree()
         process.wait()
         raise
     finally:
         for reader in readers:
             reader.join(timeout=1)
     if any(reader.is_alive() for reader in readers):
-        raise RuntimeError('compiler output pipes remained open after process exit')
+        kill_process_tree()
+        for reader in readers:
+            reader.join(timeout=1)
+        if any(reader.is_alive() for reader in readers):
+            raise RuntimeError('compiler output pipes remained open after process exit')
     if exceeded.is_set():
         raise RuntimeError('compiler output budget exceeded')
     return subprocess.CompletedProcess(argv, process.returncode,

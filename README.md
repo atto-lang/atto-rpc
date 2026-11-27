@@ -67,6 +67,28 @@ The builder fails closed on duplicate message names, duplicate wire field names/
 
 Field numbers are shared by protobuf and MessagePack so one compatibility policy governs both representations.
 
+The checked builder has deliberately conservative per-graph limits:
+**64 messages**, **128 fields per message**, **256 RPC methods**,
+**256 HTTP handlers**, and **512 HTTP field bindings**. It also rejects
+duplicate HTTP path placeholders, contradictory `required + repeated`
+fields, and ambiguous generated names. These are **cardinality limits**,
+not yet byte-length/depth/output-size limits. The pinned Java runtime
+does not provide a verified `String.length` member, so byte budgets and
+recursion-depth admission remain release blockers for arbitrary untrusted
+contracts.
+
+Field-number text must now be the **canonical decimal representation** of its
+integer value, with no leading zeros, signs, whitespace, or substitutions.
+Validation uses bounded integral arithmetic and rejects mismatches before code
+generation; field IDs 19000–19999 remain reserved by protobuf.
+
+For untrusted inputs use `generate_all_checked(...)` and handle its
+`Result<GeneratedBundle, String>`. It conservatively admits HTTPS ASCII schema
+IDs, identifier-only dotted protobuf packages/TypeSpec namespaces, and simple
+slash-separated literal or `{field}` HTTP paths. Route placeholders must match
+explicit required path bindings in both directions. HTTP header collisions are
+checked case-insensitively. Malformed or reserved cross-IDL names reject.
+
 Message, field, service, RPC method, and referenced message type names
 must satisfy the compiler's identifier predicate before they can become
 schema/IDL source. HTTP field binding names must satisfy the identifier
@@ -76,9 +98,12 @@ HTTP field bindings also reject two request fields claiming the same external
 wire parameter within one contract and location. Equivalent names in distinct
 locations or distinct contracts remain separate; header-name case folding and
 full transport parser compatibility still need independent verification.
-The low-level emitters still require trusted schema IDs, package names,
-namespace names, and route templates until dedicated escaping/admission
-contracts are implemented; do not feed untrusted strings to those arguments.
+Low-level emitter functions (`json_schema`, `protobuf`, `typespec`,
+`messagepack_defs`, and legacy `generate_all`) remain **trusted-only APIs**;
+they do not perform all generator-entry checks. The checked entrypoint rejects
+unsafe top-level names, but no full compiler-executed verification has yet been
+completed. Keep untrusted schema publication disabled until full source and
+external parser checks are green.
 
 ## Example
 
@@ -115,15 +140,18 @@ pub routine main(): void {
     1001,
     7
   ).unwrap();
+  contracts.add_http_field_binding(
+    rpc.http_path_field(42, "id", "id")
+  ).unwrap();
 
   val graph = contracts.build().unwrap();
 
-  val outputs = rpc.generate_all(
+  val outputs = rpc.generate_all_checked(
     rt borrow graph,
     "https://example.test/schema/rpc",
-    "example.rpc",
-    "Example.Rpc"
-  );
+    "example.api",
+    "Example.Api"
+  ).unwrap();
 
   // TextDocument is a sequence of native Oreslang String fragments.
   // A CLI/file/socket adapter can stream them without a Java StringBuilder.
@@ -162,6 +190,70 @@ See `docs/MESSAGEPACK.md` for compatibility rules.
 - TypeSpec generation
 
 The repository pins the compiler revision in `SOURCE_REF`.
+
+## Native full-document export and independent validation
+
+The four `tests/export_*.ores` entry points each generate the same validated
+contract graph and stream exactly one output format to `stdio.out.write`.
+They never use `println` or insert a separator between `TextDocument`
+fragments. `scripts/export-contracts.sh` requires a passing `scripts/test.sh`
+preflight against an **exact, clean `SOURCE_REF` compiler checkout**. It checks
+each source before executing and captures each complete guest stream. The
+`scripts/emit-guest-document.py` helper uses the existing bounded-process
+runner to terminate the process group if it exceeds its output or time
+budget: **64 KiB** combined stdout/stderr for each compiler check,
+**1 MiB** combined stdout/stderr for each artifact-producing execution,
+and a configurable per-process timeout (**120 seconds** by default).
+The pinned-compiler test preflight is also bounded. Invalid UTF-8,
+empty artifacts, and any failed process prevent publishing a **new** output
+directory. No partial destination is published on failure.
+
+```bash
+# Use a clean Java compiler checkout at the pinned SOURCE_REF.
+# Build with JDK 25 and Maven as described in scripts/compiler.sh:
+#   mvn -q -DskipTests package dependency:build-classpath -Dmdep.outputFile=target/classpath.txt
+export ORESLANG_SOURCE_DIR=/absolute/path/to/oreslang-source.java
+export ORESLANG_COMPILER="$PWD/scripts/compiler.sh"
+python3 -m pip install 'jsonschema==4.26.0'
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+
+# Destination must NOT yet exist; parent directory must exist.
+bash scripts/export-contracts.sh /tmp/rpc-contract-export-verified
+
+# Requires real protoc and @typespec/compiler CLI (tsp) with
+# @typespec/http installed in the TypeSpec project.
+python3 scripts/verify-contract-output.py \
+  --json-schema /tmp/rpc-contract-export-verified/contracts.schema.json \
+  --protobuf /tmp/rpc-contract-export-verified/contracts.proto \
+  --messagepack /tmp/rpc-contract-export-verified/contracts.mpackdef \
+  --typespec /tmp/rpc-contract-export-verified/contracts.tsp
+```
+
+The independent validator checks JSON Schema 2020-12 and MessagePack
+syntax, **cross-checks JSON Schema/MessagePack model registries, property
+names, requiredness, field types and named references**, and runs external
+`protoc`/`tsp` on the actual exported files. It rejects symlinks, empty or
+over-1-MiB inputs, non-JSON NaN/Infinity tokens and malformed required
+properties; external validators have 90-second timeouts. Missing validators
+cause a failure, never a skipped success. It cannot compare numeric wire IDs
+against JSON Schema (which has no field-number representation).
+
+The eleven export harness tests use a **fake compiler** to verify
+byte-preservation, process timeout, stdout/stderr overflow, UTF-8 rejection,
+fixture parity and cleanup. The twelve validator unit tests cover parsing,
+schema parity, malformed input and fail-closed behavior. These source-level
+tests and their local model-level checks are **not native Oreslang guest
+execution evidence**. The native fixture now has 102 expected output lines,
+including six reserved MessagePack primitive-name rejections. Actual pinned
+compiler execution, full artifact validation and security review are still
+required.
+
+The live output/time budget limits captured output and wall-clock time for
+each invoked subprocess, but it is **not** a guest heap-memory limit, an
+untrusted input-byte limit, a recursion-depth limit, or a total multi-process
+work budget. These gaps still block untrusted RPC contract ingestion. The
+compiler executable must also be independently attested to the pinned source
+checkout; the SHA/clean-checkout checks do not establish binary provenance.
 
 ## Compiler compatibility checkpoint (2026-10-06)
 

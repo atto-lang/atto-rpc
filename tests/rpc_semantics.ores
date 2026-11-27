@@ -335,5 +335,159 @@ pub routine main(): void {
     55, "valid_field", "broken\"name", rpc.http_query_location()
   ).is_valid());
 
+  // Wire numbers are immutable numeric identities, not caller-supplied
+  // protobuf/MessagePack source tokens. Leading zeros and source injection
+  // must be rejected before any emitter is invoked.
+  stdio.println(rpc.field("safe", 1, "1", rpc.string_type(), true, false).is_valid());
+  stdio.println(rpc.field("mismatch", 1, "2", rpc.string_type(), true, false).is_valid());
+  stdio.println(rpc.field("zero_prefix", 1, "01", rpc.string_type(), true, false).is_valid());
+  stdio.println(rpc.field("injection", 1, "1; injected", rpc.string_type(), true, false).is_valid());
+  stdio.println(rpc.field("maximum", 536870911, "536870911", rpc.string_type(), true, false).is_valid());
+  stdio.println(rpc.field("overflow", 536870912, "536870912", rpc.string_type(), true, false).is_valid());
+  stdio.println(rpc.field("reserved_num", 19999, "19999", rpc.string_type(), true, false).is_valid());
+  stdio.println(rpc.message("message", arr[]).is_valid());
+  stdio.println(rpc.rpc_method(
+    56, "service", "Call", "test.call", "Req", "Res"
+  ).is_valid());
+
+  // The safe entrypoint validates every top-level generator argument.
+  stdio.println(rpc.generate_all_checked(
+    rt borrow contracts, "https://example.test/schema/rpc", "example.api", "Example.Api"
+  ).is_ok());
+  stdio.println(rpc.generate_all_checked(
+    rt borrow contracts, "https://example.test/x\"evil", "example.api", "Example.Api"
+  ).is_err());
+  stdio.println(rpc.generate_all_checked(
+    rt borrow contracts, "https://example.test/schema/rpc", "example.api;evil", "Example.Api"
+  ).is_err());
+  stdio.println(rpc.generate_all_checked(
+    rt borrow contracts, "https://example.test/schema/rpc", "example.api", "Example.Api\"evil"
+  ).is_err());
+
+  // HTTP header aliases must fold ASCII case before collision detection.
+  let header_alias_builder = rpc.builder();
+  header_alias_builder.add_http_field_binding(
+    rpc.http_header_field(600, "first", "X-Trace")
+  ).unwrap();
+  stdio.println(header_alias_builder.add_http_field_binding(
+    rpc.http_header_field(600, "second", "x-trace")
+  ).is_err());
+  stdio.println(header_alias_builder.http_field_binding_count());
+
+  // An HTTP route cannot silently accept unbound placeholders.
+  let missing_path_builder = rpc.builder();
+  missing_path_builder.add_message(rpc.message("Req", arr[
+    rpc.field("id", 1, "1", rpc.string_type(), true, false)
+  ])).unwrap();
+  missing_path_builder.add_message(rpc.message("Res", arr[
+    rpc.field("ok", 1, "1", rpc.bool_type(), true, false)
+  ])).unwrap();
+  missing_path_builder.add_rpc_as_http(
+    rpc.rpc_method(700, "Tests", "MissingPath", "tests.missing_path", "Req", "Res"),
+    "GET", "/items/{id}", 700, 1
+  ).unwrap();
+  stdio.println(missing_path_builder.build().is_err());
+
+  // Nor can a path binding claim an absent route placeholder.
+  let extra_path_builder = rpc.builder();
+  extra_path_builder.add_message(rpc.message("Req", arr[
+    rpc.field("id", 1, "1", rpc.string_type(), true, false)
+  ])).unwrap();
+  extra_path_builder.add_message(rpc.message("Res", arr[
+    rpc.field("ok", 1, "1", rpc.bool_type(), true, false)
+  ])).unwrap();
+  extra_path_builder.add_rpc_as_http(
+    rpc.rpc_method(701, "Tests", "ExtraPath", "tests.extra_path", "Req", "Res"),
+    "GET", "/items", 701, 1
+  ).unwrap();
+  extra_path_builder.add_http_field_binding(
+    rpc.http_path_field(701, "id", "id")
+  ).unwrap();
+  stdio.println(extra_path_builder.build().is_err());
+
+  // Generated TypeSpec models and interfaces share one namespace.
+  let service_name_collision = rpc.builder();
+  service_name_collision.add_message(rpc.message("Req", arr[])).unwrap();
+  service_name_collision.add_message(rpc.message("Res", arr[])).unwrap();
+  service_name_collision.add_rpc(
+    rpc.rpc_method(800, "Req", "Call", "test.service_collision", "Req", "Res")
+  ).unwrap();
+  stdio.println(service_name_collision.build().is_err());
+
+  let projection_name_collision = rpc.builder();
+  projection_name_collision.add_message(rpc.message("Req", arr[])).unwrap();
+  projection_name_collision.add_message(rpc.message("Res", arr[])).unwrap();
+  projection_name_collision.add_message(rpc.message("A_B_HttpRequest", arr[])).unwrap();
+  projection_name_collision.add_rpc_as_http(
+    rpc.rpc_method(801, "A", "B", "test.projection_collision", "Req", "Res"),
+    "GET", "/ping", 801, 1
+  ).unwrap();
+  stdio.println(projection_name_collision.build().is_err());
+
+  let ambiguous_projection = rpc.builder();
+  ambiguous_projection.add_message(rpc.message("Req", arr[])).unwrap();
+  ambiguous_projection.add_message(rpc.message("Res", arr[])).unwrap();
+  ambiguous_projection.add_rpc_as_http(
+    rpc.rpc_method(802, "A_B", "C", "test.c", "Req", "Res"),
+    "GET", "/c", 802, 1
+  ).unwrap();
+  ambiguous_projection.add_rpc_as_http(
+    rpc.rpc_method(803, "A", "B_C", "test.b_c", "Req", "Res"),
+    "GET", "/b-c", 803, 1
+  ).unwrap();
+  stdio.println(ambiguous_projection.build().is_err());
+
+  // Budget validation is independent of identifier uniqueness: 64 unique
+  // messages are admitted, while the 65th must fail without mutation.
+  let cap_builder = rpc.builder();
+  let String cap_name = "M";
+  for (let int cap_index = 0; cap_index < 64; cap_index = cap_index + 1) {
+    cap_builder.add_message(rpc.message(cap_name, arr[])).unwrap();
+    cap_name = cap_name + "x";
+  }
+  stdio.println(cap_builder.message_count());
+  stdio.println(cap_builder.add_message(rpc.message(cap_name, arr[])).is_err());
+  stdio.println(cap_builder.message_count());
+
+  // Invalid TypeSpec string literal routes must fail at contract build even
+  // if the same malformed HTTP path was accepted at initial registration.
+  let route_injection_builder = rpc.builder();
+  route_injection_builder.add_message(rpc.message("Req", arr[])).unwrap();
+  route_injection_builder.add_message(rpc.message("Res", arr[])).unwrap();
+  route_injection_builder.add_rpc_as_http(
+    rpc.rpc_method(810, "Tests", "RouteInjection", "tests.route_injection", "Req", "Res"),
+    "GET", "/injected\\\"token", 810, 1
+  ).unwrap();
+  stdio.println(route_injection_builder.build().is_err());
+
+  // Proto3 cannot encode an independently required repeated field.
+  stdio.println(rpc.field(
+    "invalid_presence", 1, "1", rpc.string_type(), true, true
+  ).is_valid());
+
+  // Repeated {id} route placeholders are ambiguous even with one binding.
+  let repeat_path_builder = rpc.builder();
+  repeat_path_builder.add_message(rpc.message("Req", arr[
+    rpc.field("id", 1, "1", rpc.string_type(), true, false)
+  ])).unwrap();
+  repeat_path_builder.add_message(rpc.message("Res", arr[])).unwrap();
+  repeat_path_builder.add_rpc_as_http(
+    rpc.rpc_method(820, "Tests", "RepeatPath", "tests.repeat_path", "Req", "Res"),
+    "GET", "/items/{id}/{id}", 820, 1
+  ).unwrap();
+  repeat_path_builder.add_http_field_binding(
+    rpc.http_path_field(820, "id", "id")
+  ).unwrap();
+  stdio.println(repeat_path_builder.build().is_err());
+
+  // MessagePack primitives cannot be shadowed by named messages; a
+  // foreign schema must not change scalar `str`/`int`/`bin` wire meaning.
+  stdio.println(rpc.message("str", arr[]).is_valid());
+  stdio.println(rpc.message("int", arr[]).is_valid());
+  stdio.println(rpc.message("bin", arr[]).is_valid());
+  stdio.println(rpc.message("timestamp", arr[]).is_valid());
+  stdio.println(rpc.message("array", arr[]).is_valid());
+  stdio.println(rpc.message_type("any").is_valid());
+
   return;
 }

@@ -25,7 +25,7 @@ pub routine main(): void {
   ).unwrap();
   val document = generated.json_schema;
   for (let int index = 0; index < document.part_count(); index = index + 1) {
-    stdio.stdout.write(document.part_at(index));
+    stdio.out.write(document.part_at(index));
   }
   return;
 }
